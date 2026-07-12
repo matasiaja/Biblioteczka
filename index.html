@@ -399,6 +399,18 @@ function cleanBnTitleFallback(t){
   return stripTrailingPunct(t.split(' / ')[0]);
 }
 
+// Google Books ma zaskakująco dobre pokrycie okładek nawet dla polskich wydań, których
+// nie ma Open Library — sprawdzamy to zawsze jako dodatkowe źródło okładki dla książek.
+async function fetchGoogleBooksCover(isbn){
+  try {
+    const res = await fetch(`${FUNCTIONS_BASE}/google-books?isbn=${encodeURIComponent(isbn)}`);
+    const data = await res.json();
+    const v = data.items && data.items[0] && data.items[0].volumeInfo;
+    const url = v && v.imageLinks ? (v.imageLinks.thumbnail || v.imageLinks.smallThumbnail || '') : '';
+    return url.replace(/^http:/, 'https:');
+  } catch(e){ return ''; }
+}
+
 async function lookupBook(code){
   // 1. Biblioteka Narodowa (najlepsze pokrycie polskich wydań)
   try {
@@ -408,14 +420,15 @@ async function lookupBook(code){
     if (b){
       toast('Znaleziono dane książki (Biblioteka Narodowa)');
       const parsed = parseBnMarc(b);
+      // BN nie udostępnia okładek — próbujemy Google Books, a jak nie ma, Open Library
+      const gbCover = await fetchGoogleBooksCover(code);
       return {
         type: 'book',
         title: parsed.title,
         creator: parsed.creator,
         format: 'papierowa miękka',
         year: b.publicationYear ? (String(b.publicationYear).match(/\d{4}/)||[])[0]||'' : '',
-        // BN nie udostępnia okładek — próbujemy Open Library po tym samym ISBN (czasem trafia mimo braku opisu tam)
-        cover_url: `https://covers.openlibrary.org/b/isbn/${encodeURIComponent(code)}-M.jpg?default=false`
+        cover_url: gbCover || `https://covers.openlibrary.org/b/isbn/${encodeURIComponent(code)}-M.jpg?default=false`
       };
     }
   } catch(e){ /* brak sieci - próbujemy dalej */ }
@@ -426,19 +439,20 @@ async function lookupBook(code){
     const b = data[`ISBN:${code}`];
     if (b){
       toast('Znaleziono dane książki (Open Library)');
+      const gbCover = await fetchGoogleBooksCover(code);
       return {
         type: 'book',
         title: b.title || '',
         creator: (b.authors||[]).map(a=>a.name).join(', '),
         format: 'papierowa miękka',
         year: b.publish_date ? (b.publish_date.match(/\d{4}/)||[])[0]||'' : '',
-        cover_url: `https://covers.openlibrary.org/b/isbn/${encodeURIComponent(code)}-M.jpg?default=false`
+        cover_url: gbCover || `https://covers.openlibrary.org/b/isbn/${encodeURIComponent(code)}-M.jpg?default=false`
       };
     }
   } catch(e){ /* brak sieci - próbujemy dalej */ }
   // 3. Google Books (fallback, np. dla wydań spoza Open Library/BN)
   try {
-    const res = await fetch(`https://www.googleapis.com/books/v1/volumes?q=isbn:${encodeURIComponent(code)}`);
+    const res = await fetch(`${FUNCTIONS_BASE}/google-books?isbn=${encodeURIComponent(code)}`);
     const data = await res.json();
     const v = data.items && data.items[0] && data.items[0].volumeInfo;
     if (v){
@@ -449,7 +463,7 @@ async function lookupBook(code){
         creator: (v.authors||[]).join(', '),
         format: 'papierowa miękka',
         year: v.publishedDate ? (v.publishedDate.match(/\d{4}/)||[])[0]||'' : '',
-        cover_url: v.imageLinks ? (v.imageLinks.thumbnail || v.imageLinks.smallThumbnail || '') : ''
+        cover_url: v.imageLinks ? (v.imageLinks.thumbnail || v.imageLinks.smallThumbnail || '').replace(/^http:/, 'https:') : ''
       };
     }
   } catch(e){ /* brak sieci albo nie znaleziono - uzupełnisz ręcznie */ }
