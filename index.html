@@ -304,7 +304,7 @@ function manualBarcode(){
 }
 
 function skipBarcode(){
-  state.lookup = { barcode: null, type: 'book', title: '', creator: '', format: '', year: '' };
+  state.lookup = { barcode: null, type: 'book', title: '', creator: '', format: '', year: '', cover_url: '' };
   render();
 }
 
@@ -318,7 +318,7 @@ async function onBarcode(code){
     render();
     return;
   }
-  let guess = { type: 'book', title: '', creator: '', format: '', year: '' };
+  let guess = { type: 'book', title: '', creator: '', format: '', year: '', cover_url: '' };
   if (isIsbn(code)){
     guess = await lookupBook(code) || guess;
   } else {
@@ -345,7 +345,8 @@ async function lookupBook(code){
         title: b.title || '',
         creator: (b.authors||[]).map(a=>a.name).join(', '),
         format: 'papierowa miękka',
-        year: b.publish_date ? (b.publish_date.match(/\d{4}/)||[])[0]||'' : ''
+        year: b.publish_date ? (b.publish_date.match(/\d{4}/)||[])[0]||'' : '',
+        cover_url: `https://covers.openlibrary.org/b/isbn/${encodeURIComponent(code)}-M.jpg?default=false`
       };
     }
   } catch(e){ /* brak sieci - próbujemy dalej */ }
@@ -361,7 +362,8 @@ async function lookupBook(code){
         title: v.title || '',
         creator: (v.authors||[]).join(', '),
         format: 'papierowa miękka',
-        year: v.publishedDate ? (v.publishedDate.match(/\d{4}/)||[])[0]||'' : ''
+        year: v.publishedDate ? (v.publishedDate.match(/\d{4}/)||[])[0]||'' : '',
+        cover_url: v.imageLinks ? (v.imageLinks.thumbnail || v.imageLinks.smallThumbnail || '') : ''
       };
     }
   } catch(e){ /* brak sieci albo nie znaleziono - uzupełnisz ręcznie */ }
@@ -387,10 +389,11 @@ async function lookupBarcodeGeneral(code){
         title: item.title || '',
         creator: item.brand || '',
         format,
-        year: (item.title||'').match(/\b(19|20)\d{2}\b/)?.[0] || ''
+        year: (item.title||'').match(/\b(19|20)\d{2}\b/)?.[0] || '',
+        cover_url: (item.images && item.images[0]) || ''
       };
       toast('Znaleziono dane w bazie kodów kreskowych');
-      if (type === 'movie' && OMDB_API_KEY){
+      if (type === 'movie'){
         const cleanTitle = (item.title || '').replace(/[\[(].*?[\])]/g, '').replace(/\b(dvd|blu-?ray|vhs)\b/gi, '').trim();
         const omdb = await lookupMovieDetails(cleanTitle);
         if (omdb) guess = { ...guess, ...omdb };
@@ -398,20 +401,21 @@ async function lookupBarcodeGeneral(code){
       return guess;
     }
   } catch(e){ /* brak sieci, limit zapytań albo nie znaleziono - uzupełnisz ręcznie */ }
-  return { type: 'movie', title: '', creator: '', format: '', year: '' };
+  return { type: 'movie', title: '', creator: '', format: '', year: '', cover_url: '' };
 }
 
 async function lookupMovieDetails(title){
-  if (!title) return null;
+  if (!title || !OMDB_API_KEY) return null;
   try {
     const res = await fetch(`https://www.omdbapi.com/?apikey=${encodeURIComponent(OMDB_API_KEY)}&t=${encodeURIComponent(title)}&type=movie`);
     const data = await res.json();
     if (data.Response === 'True'){
-      toast('Znaleziono reżysera i rok premiery (OMDb)');
+      toast('Znaleziono reżysera, rok premiery i plakat (OMDb)');
       return {
         title: data.Title || title,
         creator: data.Director && data.Director !== 'N/A' ? data.Director : '',
-        year: data.Year ? (data.Year.match(/\d{4}/)||[])[0]||'' : ''
+        year: data.Year ? (data.Year.match(/\d{4}/)||[])[0]||'' : '',
+        cover_url: data.Poster && data.Poster !== 'N/A' ? data.Poster : undefined
       };
     }
   } catch(e){ /* brak sieci albo nie znaleziono - uzupełnisz ręcznie */ }
@@ -423,6 +427,7 @@ function renderAddForm(main){
   main.innerHTML = `
     <div class="section-title">Nowa pozycja</div>
     <div class="card">
+      ${l.cover_url ? `<img src="${escapeHtml(l.cover_url)}" alt="" style="width:80px;height:110px;object-fit:cover;border-radius:8px;display:block;margin:0 auto 14px;" onerror="this.style.display='none'">` : ''}
       ${l.barcode ? `<label>Kod kreskowy</label><input value="${escapeHtml(l.barcode)}" disabled class="mono">` : ''}
       <label>Rodzaj</label>
       <select id="f-type" onchange="onTypeChange()">
@@ -456,6 +461,11 @@ function onTypeChange(){
   render();
 }
 
+function coverImg(url, size){
+  if (!url) return '';
+  return `<img src="${escapeHtml(url)}" alt="" class="cover" style="${size?`width:${size}px;height:${Math.round(size*1.36)}px;`:''}" onerror="this.style.display='none'">`;
+}
+
 function cancelAdd(){
   state.lookup = null;
   render();
@@ -471,7 +481,8 @@ async function saveItem(){
     title,
     creator: document.getElementById('f-creator').value.trim() || null,
     format: document.getElementById('f-format').value.trim() || null,
-    year: parseInt(document.getElementById('f-year').value) || null
+    year: parseInt(document.getElementById('f-year').value) || null,
+    cover_url: l.cover_url || null
   };
   const { error } = await sb.from('items').insert(payload);
   if (error){ toast('Błąd zapisu: ' + error.message); return; }
@@ -493,8 +504,9 @@ function renderList(main){
         filtered.map(i=>{
           const loan = activeLoanFor(i.id);
           return `<div class="item-row" onclick="openItem('${i.id}')">
-            <div>
-              <div class="name">${icon(i.type)} ${escapeHtml(i.title)}</div>
+            ${i.cover_url ? coverImg(i.cover_url) : `<div class="cover" style="display:flex;align-items:center;justify-content:center;color:var(--text-dim);">${icon(i.type)}</div>`}
+            <div style="flex:1;">
+              <div class="name">${escapeHtml(i.title)}</div>
               <div class="meta">${escapeHtml(i.creator||'—')}${i.format?' · '+escapeHtml(i.format):''}${i.year?' · '+i.year:''}</div>
             </div>
             ${loan ? `<span class="badge warn">u: ${escapeHtml(loan.borrower_name)}</span>` : ''}
@@ -518,6 +530,7 @@ function openItem(id){
   main.innerHTML = `
     <button class="link" onclick="renderTab()">&larr; Wróć do listy</button>
     <div class="card" style="margin-top:12px;">
+      ${item.cover_url ? `<div style="margin-bottom:14px;">${coverImg(item.cover_url, 100)}</div>` : ''}
       <div class="section-title">${TYPE_LABELS[item.type]}</div>
       <h2 style="margin:0 0 4px;">${escapeHtml(item.title)}</h2>
       <div class="meta mono" style="color:var(--text-dim);margin-bottom:14px;">${escapeHtml(item.creator||'—')}${item.format?' · '+escapeHtml(item.format):''}${item.year?' · '+item.year:''}${item.barcode?' · '+escapeHtml(item.barcode):''}</div>
