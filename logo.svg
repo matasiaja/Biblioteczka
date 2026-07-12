@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#8B6BFF"/>
+      <stop offset="1" stop-color="#6247CC"/>
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="16" fill="url(#bg)"/>
+  <!-- disc peeking from behind, suggesting film/music -->
+  <circle cx="41" cy="24" r="11" fill="#FFB020"/>
+  <circle cx="41" cy="24" r="3.4" fill="#6247CC"/>
+  <!-- open book -->
+  <path d="M32 22 C27 19 20 18 15 19.5 V43.5 C20 42 27 43 32 46 C37 43 44 42 49 43.5 V19.5 C44 18 37 19 32 22 Z"
+        fill="#F5F3FF"/>
+  <path d="M32 22 V46" stroke="#C9BEFF" stroke-width="1.6"/>
+  <path d="M19 24.5 C22.5 23.3 26.5 23.6 30 25.3" stroke="#B9ADFF" stroke-width="1.6" fill="none" stroke-linecap="round"/>
+  <path d="M19 30.5 C22.5 29.3 26.5 29.6 30 31.3" stroke="#B9ADFF" stroke-width="1.6" fill="none" stroke-linecap="round"/>
+  <path d="M19 36.5 C22.5 35.3 26.5 35.6 30 37.3" stroke="#B9ADFF" stroke-width="1.6" fill="none" stroke-linecap="round"/>
+  <path d="M45 24.5 C41.5 23.3 37.5 23.6 34 25.3" stroke="#B9ADFF" stroke-width="1.6" fill="none" stroke-linecap="round"/>
+  <path d="M45 30.5 C41.5 29.3 37.5 29.6 34 31.3" stroke="#B9ADFF" stroke-width="1.6" fill="none" stroke-linecap="round"/>
+  <path d="M45 36.5 C41.5 35.3 37.5 35.6 34 37.3" stroke="#B9ADFF" stroke-width="1.6" fill="none" stroke-linecap="round"/>
+</svg>
