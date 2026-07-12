@@ -219,6 +219,9 @@ async function setTab(tab){
   state.lookup = null;
   state.loanScanning = false;
   localStorage.setItem('bib_tab', tab);
+  if (tab === 'list' || tab === 'loans'){
+    await loadAll(); // odśwież — inne urządzenie (np. telefon) mogło coś dodać/zmienić
+  }
   render();
 }
 
@@ -271,6 +274,22 @@ function renderScan(main){
     renderAddForm(main);
     return;
   }
+  // Kamera na telefonie (zwłaszcza iOS) wymaga, żeby jej uruchomienie było bezpośrednią
+  // reakcją na dotknięcie ekranu — nie da się jej auto-odpalić zaraz po wejściu na zakładkę.
+  main.innerHTML = `
+    <div class="card" style="text-align:center;padding:36px 20px;">
+      <div class="scan-hint" style="margin-bottom:16px;">Dotknij, żeby uruchomić kamerę</div>
+      <button class="btn" onclick="beginScan()">Rozpocznij skanowanie</button>
+    </div>
+    <div style="margin-top:14px;">
+      <button class="btn secondary" onclick="manualBarcode()">Wpisz kod ręcznie</button>
+      <button class="btn secondary" style="margin-top:8px;" onclick="skipBarcode()">Dodaj bez kodu</button>
+    </div>
+  `;
+}
+
+function beginScan(){
+  const main = document.getElementById('main');
   main.innerHTML = `
     <div class="scan-frame">
       <div id="reader"></div>
@@ -842,6 +861,14 @@ function renderSettings(main){
 }
 
 document.addEventListener('DOMContentLoaded', boot);
+
+// Gdy wracasz do karty/appki (np. z innego urządzenia dodano coś w międzyczasie) — odśwież dane.
+document.addEventListener('visibilitychange', async () => {
+  if (document.visibilityState === 'visible' && session){
+    await loadAll();
+    if (state.tab === 'list' || state.tab === 'loans') renderTab();
+  }
+});
 </script>
 </body>
 </html>
