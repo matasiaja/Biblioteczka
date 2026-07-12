@@ -346,15 +346,37 @@ function isIsbn(code){
   return /^97[89]\d{10}$/.test(code) || /^\d{9}[\dXx]$/.test(code);
 }
 
-function cleanBnTitle(t){
-  if (!t) return '';
-  return t.split(' / ')[0].trim();
+function stripTrailingPunct(s){
+  return (s||'').replace(/[\s:;,/]+$/, '').trim();
 }
 
-function extractBnAuthors(a){
-  if (!a) return '';
-  const matches = a.match(/[A-ZŻŹĆĄŚĘŁÓŃ][a-ząćęłńóśźż-]+,\s*[A-ZŻŹĆĄŚĘŁÓŃ][a-ząćęłńóśźż-]+/g);
-  return matches ? [...new Set(matches)].join('; ') : a;
+// Bibioteka Narodowa udostępnia pola MARC — pole 245 (tytuł) i 100 (główny autor)
+// są dużo dokładniejsze niż spłaszczone pola "title"/"author" z odpowiedzi.
+function parseBnMarc(bib){
+  const fields = (bib.marc && bib.marc.fields) || [];
+  let title = '';
+  const authors = [];
+  for (const f of fields){
+    if (f['245'] && !title){
+      const sub = f['245'].subfields || [];
+      const aPart = sub.find(s => s.a)?.a;
+      if (aPart) title = stripTrailingPunct(aPart);
+    }
+    if (f['100']){
+      const sub = f['100'].subfields || [];
+      const aPart = sub.find(s => s.a)?.a;
+      if (aPart) authors.push(stripTrailingPunct(aPart));
+    }
+  }
+  return {
+    title: title || cleanBnTitleFallback(bib.title),
+    creator: authors.length ? authors.join('; ') : (bib.author || '')
+  };
+}
+
+function cleanBnTitleFallback(t){
+  if (!t) return '';
+  return stripTrailingPunct(t.split(' / ')[0]);
 }
 
 async function lookupBook(code){
@@ -365,10 +387,11 @@ async function lookupBook(code){
     const b = data.bibs && data.bibs[0];
     if (b){
       toast('Znaleziono dane książki (Biblioteka Narodowa)');
+      const parsed = parseBnMarc(b);
       return {
         type: 'book',
-        title: cleanBnTitle(b.title),
-        creator: extractBnAuthors(b.author),
+        title: parsed.title,
+        creator: parsed.creator,
         format: 'papierowa miękka',
         year: b.publicationYear ? (String(b.publicationYear).match(/\d{4}/)||[])[0]||'' : '',
         cover_url: ''
