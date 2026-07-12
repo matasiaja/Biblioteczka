@@ -1,1 +1,4 @@
 .supabase/
+
+# Local Netlify folder
+.netlify
