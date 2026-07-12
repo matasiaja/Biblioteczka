@@ -80,6 +80,9 @@
 // ==========================================================
 const SUPABASE_URL = "https://alxwzewdsqhaszzcpkga.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFseHd6ZXdkc3FoYXN6emNwa2dhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM4NjcyNDEsImV4cCI6MjA5OTQ0MzI0MX0.dxPCsqjkzYz0zzRVJ3zHcadYTSrdhqBxfvqNj_B-el4";
+// Opcjonalnie: darmowy klucz z https://www.omdbapi.com/apikey.aspx — pozwala automatycznie
+// uzupełniać reżysera i rok premiery dla filmów po zeskanowaniu kodu kreskowego.
+const OMDB_API_KEY = "";
 // ==========================================================
 
 let sb = null;
@@ -87,9 +90,11 @@ let session = null;
 const TYPE_LABELS = { book: 'Książka', movie: 'Film', music: 'Muzyka' };
 const TYPE_FORMATS = {
   book: ['papierowa miękka', 'papierowa twarda'],
-  movie: ['Blu-ray', 'DVD'],
+  movie: ['DVD', 'Blu-ray', 'VHS'],
   music: ['CD', 'winyl']
 };
+const CREATOR_LABELS = { book: 'Autor', movie: 'Reżyser', music: 'Artysta' };
+const YEAR_LABELS = { book: 'Rok wydania', movie: 'Rok premiery', music: 'Rok wydania' };
 let state = {
   tab: localStorage.getItem('bib_tab') || 'scan',
   typeFilter: localStorage.getItem('bib_type_filter') || 'all',
@@ -375,19 +380,42 @@ async function lookupBarcodeGeneral(code){
       const isMusic = /music|vinyl|audio cd|album/.test(cat) || /vinyl|soundtrack/.test(title);
       const type = isMusic ? 'music' : 'movie';
       let format = '';
-      if (type === 'movie') format = /blu-?ray/i.test(item.title||'') ? 'Blu-ray' : /dvd/i.test(item.title||'') ? 'DVD' : '';
+      if (type === 'movie') format = /blu-?ray/i.test(item.title||'') ? 'Blu-ray' : /vhs/i.test(item.title||'') ? 'VHS' : /dvd/i.test(item.title||'') ? 'DVD' : '';
       else format = /vinyl/i.test(item.title||'') ? 'winyl' : /cd/i.test(item.title||'') ? 'CD' : '';
-      toast('Znaleziono dane w bazie kodów kreskowych');
-      return {
+      let guess = {
         type,
         title: item.title || '',
         creator: item.brand || '',
         format,
         year: (item.title||'').match(/\b(19|20)\d{2}\b/)?.[0] || ''
       };
+      toast('Znaleziono dane w bazie kodów kreskowych');
+      if (type === 'movie' && OMDB_API_KEY){
+        const cleanTitle = (item.title || '').replace(/[\[(].*?[\])]/g, '').replace(/\b(dvd|blu-?ray|vhs)\b/gi, '').trim();
+        const omdb = await lookupMovieDetails(cleanTitle);
+        if (omdb) guess = { ...guess, ...omdb };
+      }
+      return guess;
     }
   } catch(e){ /* brak sieci, limit zapytań albo nie znaleziono - uzupełnisz ręcznie */ }
   return { type: 'movie', title: '', creator: '', format: '', year: '' };
+}
+
+async function lookupMovieDetails(title){
+  if (!title) return null;
+  try {
+    const res = await fetch(`https://www.omdbapi.com/?apikey=${encodeURIComponent(OMDB_API_KEY)}&t=${encodeURIComponent(title)}&type=movie`);
+    const data = await res.json();
+    if (data.Response === 'True'){
+      toast('Znaleziono reżysera i rok premiery (OMDb)');
+      return {
+        title: data.Title || title,
+        creator: data.Director && data.Director !== 'N/A' ? data.Director : '',
+        year: data.Year ? (data.Year.match(/\d{4}/)||[])[0]||'' : ''
+      };
+    }
+  } catch(e){ /* brak sieci albo nie znaleziono - uzupełnisz ręcznie */ }
+  return null;
 }
 
 function renderAddForm(main){
@@ -397,23 +425,35 @@ function renderAddForm(main){
     <div class="card">
       ${l.barcode ? `<label>Kod kreskowy</label><input value="${escapeHtml(l.barcode)}" disabled class="mono">` : ''}
       <label>Rodzaj</label>
-      <select id="f-type">
+      <select id="f-type" onchange="onTypeChange()">
         <option value="book" ${l.type==='book'?'selected':''}>Książka</option>
         <option value="movie" ${l.type==='movie'?'selected':''}>Film</option>
         <option value="music" ${l.type==='music'?'selected':''}>Muzyka</option>
       </select>
       <label>Tytuł</label>
       <input id="f-title" value="${escapeHtml(l.title)}" placeholder="Tytuł">
-      <label>Autor / reżyser / artysta</label>
+      <label id="f-creator-label">${CREATOR_LABELS[l.type]}</label>
       <input id="f-creator" value="${escapeHtml(l.creator)}" placeholder="Kto stworzył">
       <label>Format</label>
-      <input id="f-format" value="${escapeHtml(l.format)}" placeholder="np. Blu-ray, CD, twarda oprawa">
-      <label>Rok</label>
+      <select id="f-format">
+        <option value="">— wybierz —</option>
+        ${TYPE_FORMATS[l.type].map(f=>`<option value="${escapeHtml(f)}" ${l.format===f?'selected':''}>${escapeHtml(f)}</option>`).join('')}
+      </select>
+      <label id="f-year-label">${YEAR_LABELS[l.type]}</label>
       <input id="f-year" value="${escapeHtml(l.year)}" placeholder="np. 2020" inputmode="numeric">
       <button class="btn" onclick="saveItem()">Zapisz do kolekcji</button>
       <button class="btn secondary" style="margin-top:8px;" onclick="cancelAdd()">Anuluj</button>
     </div>
   `;
+}
+
+function onTypeChange(){
+  state.lookup.type = document.getElementById('f-type').value;
+  state.lookup.title = document.getElementById('f-title').value;
+  state.lookup.creator = document.getElementById('f-creator').value;
+  state.lookup.format = '';
+  state.lookup.year = document.getElementById('f-year').value;
+  render();
 }
 
 function cancelAdd(){
