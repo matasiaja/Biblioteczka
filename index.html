@@ -372,8 +372,9 @@ async function lookupBook(code){
 
 async function lookupBarcodeGeneral(code){
   // UPCitemdb - darmowe wyszukiwanie po kodzie EAN/UPC (limit ok. 100 zapytań/dzień, bez klucza)
+  // Wołane przez nasz proxy (netlify/functions/upc-lookup.mjs), bo UPCitemdb blokuje CORS z przeglądarki.
   try {
-    const res = await fetch(`https://api.upcitemdb.com/prod/trial/lookup?upc=${encodeURIComponent(code)}`);
+    const res = await fetch(`/.netlify/functions/upc-lookup?upc=${encodeURIComponent(code)}`);
     const data = await res.json();
     const item = data.items && data.items[0];
     if (item){
