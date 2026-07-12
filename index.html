@@ -447,6 +447,26 @@ function detectMusicFormat(text){
   return '';
 }
 
+// UPCitemdb (darmowa baza) często zwraca tytuł żywcem z ogłoszenia na aukcji
+// (eBay itp.) — usuwamy typowe śmieci sprzedażowe, żeby zostało samo "co to jest".
+const LISTING_NOISE = [
+  /free\s*shipping/gi, /fast\s*shipping/gi, /brand\s*new/gi, /new\s*sealed/gi,
+  /factory\s*sealed/gi, /\bsealed\b/gi, /region\s*free/gi, /region\s*[1-6]\b/gi,
+  /widescreen/gi, /fullscreen/gi, /full\s*screen/gi, /\bnew\b/gi, /\bused\b/gi,
+  /\bmint\b/gi, /\bnib\b/gi, /\bnwt\b/gi, /combo\s*pack/gi, /\blot\b/gi,
+  /\d+\s*disc\s*set/gi, /special\s*edition/gi, /collector'?s?\s*edition/gi,
+  /\[?\s*(dvd|blu-?ray|vhs)\s*\]?/gi
+];
+
+function cleanListingTitle(text){
+  let t = text || '';
+  t = t.replace(/[\[(][^\])]*[\])]/g, ' '); // usuń nawiasy z dopiskami
+  for (const re of LISTING_NOISE) t = t.replace(re, ' ');
+  t = t.replace(/[-–—:|]+\s*$/, '').replace(/^\s*[-–—:|]+/, '');
+  t = t.replace(/\s{2,}/g, ' ').trim();
+  return t;
+}
+
 async function lookupBarcodeGeneral(code){
   // UPCitemdb - darmowe wyszukiwanie po kodzie EAN/UPC (limit ok. 100 zapytań/dzień, bez klucza)
   // Wołane przez nasz proxy (netlify/functions/upc-lookup.mjs), bo UPCitemdb blokuje CORS z przeglądarki.
@@ -460,17 +480,17 @@ async function lookupBarcodeGeneral(code){
       const isMusic = /music|vinyl|audio cd|album/.test(cat) || /vinyl|soundtrack/.test(title);
       const type = isMusic ? 'music' : 'movie';
       const format = type === 'movie' ? detectMovieFormat(item.title||'') : detectMusicFormat(item.title||'');
+      const cleanTitle = cleanListingTitle(item.title||'');
       let guess = {
         type,
-        title: item.title || '',
+        title: cleanTitle || item.title || '',
         creator: item.brand || '',
         format,
         year: (item.title||'').match(/\b(19|20)\d{2}\b/)?.[0] || '',
         cover_url: (item.images && item.images[0]) || ''
       };
-      toast('Znaleziono dane w bazie kodów kreskowych');
+      toast('Znaleziono dane w bazie kodów kreskowych — sprawdź i popraw w razie potrzeby');
       if (type === 'movie'){
-        const cleanTitle = (item.title || '').replace(/[\[(].*?[\])]/g, '').replace(/\b(dvd|blu-?ray|vhs)\b/gi, '').trim();
         const omdb = await lookupMovieDetails(cleanTitle);
         if (omdb) guess = { ...guess, ...omdb };
       }
