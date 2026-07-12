@@ -438,7 +438,7 @@ async function lookupBook(code){
 }
 
 function detectMovieFormat(text){
-  if (/\b(blu-?ray|bd)\b/i.test(text) || /\b4k\s?u?hd\b/i.test(text)) return 'Blu-ray';
+  if (/\b(blu[\s-]?ray|bd)\b/i.test(text) || /\b4k\s?u?hd\b/i.test(text)) return 'Blu-ray';
   if (/\bvhs\b/i.test(text)) return 'VHS';
   if (/\bdvd\b/i.test(text)) return 'DVD';
   return '';
@@ -450,23 +450,44 @@ function detectMusicFormat(text){
 }
 
 // UPCitemdb (darmowa baza) często zwraca tytuł żywcem z ogłoszenia na aukcji
-// (eBay itp.) — usuwamy typowe śmieci sprzedażowe, żeby zostało samo "co to jest".
+// (eBay itp.) — usuwamy typowe śmieci sprzedażowe, kody i etykiety formatu,
+// żeby w polu tytułu zostało samo "co to jest".
 const LISTING_NOISE = [
-  /free\s*shipping/gi, /fast\s*shipping/gi, /brand\s*new/gi, /new\s*sealed/gi,
-  /factory\s*sealed/gi, /\bsealed\b/gi, /region\s*free/gi, /region\s*[1-6]\b/gi,
-  /widescreen/gi, /fullscreen/gi, /full\s*screen/gi, /\bnew\b/gi, /\bused\b/gi,
-  /\bmint\b/gi, /\bnib\b/gi, /\bnwt\b/gi, /combo\s*pack/gi, /\blot\b/gi,
-  /\d+\s*disc\s*set/gi, /special\s*edition/gi, /collector'?s?\s*edition/gi,
-  /\[?\s*(dvd|blu-?ray|vhs)\s*\]?/gi
+  /free\s*shipping/gi, /fast\s*shipping/gi, /ships?\s*(fast|free|next\s*day|same\s*day)/gi,
+  /us\s*seller/gi, /brand\s*new/gi, /new\s*sealed/gi, /factory\s*sealed/gi,
+  /still\s*sealed/gi, /\bsealed\b/gi, /pre-?owned/gi, /like\s*new/gi,
+  /very\s*good\s*condition/gi, /good\s*condition/gi, /excellent\s*condition/gi,
+  /tested\s*(and\s*)?works?\s*(great|perfect|fine)?/gi, /\bworks?\s*(great|perfect|fine)\b/gi,
+  /case\s*included/gi, /no\s*scratch(es)?/gi, /scratch\s*free/gi,
+  /\bauthentic\b/gi, /\bgenuine\b/gi, /\brare\b/gi, /\bhtf\b/gi,
+  /out\s*of\s*print/gi, /\boop\b/gi,
+  /region\s*free/gi, /region\s*[0-9]\b/gi,
+  /widescreen/gi, /fullscreen/gi, /full\s*screen/gi,
+  /\bnew\b/gi, /\bused\b/gi, /\bmint\b/gi, /\bnib\b/gi, /\bnwt\b/gi,
+  /combo\s*pack/gi, /\blot\s*of\s*\d+\b/gi, /\blot\b/gi,
+  /\d+[\s-]?disc(s)?(\s*set)?\b/gi, /special\s*edition/gi, /collector'?s?\s*edition/gi,
+  /anniversary\s*edition/gi,
+  /\b4k\b/gi, /\buhd\b/gi, /\bblu[\s-]?rays?\b/gi, /\bdvds?\b/gi, /\bvhs\b/gi
 ];
 
+// Etykietowane kody (UPC 012345678905, SKU: ABC-123, ASIN B00XYZ...) i gołe długie
+// numery (kody kreskowe/SKU mają zwykle 6+ cyfr — realne tytuły rzadko mają tak długie liczby)
+const CODE_LABEL_RE = /\b(upc|ean|isbn|asin|sku|mpn|model)\s*[:#]?\s*[a-z0-9-]{4,}\b/gi;
+const BARE_CODE_RE = /\b\d{6,}\b/g;
+const DECOR_CHARS_RE = /[★☆●○◆◇■□▲▼✦✧♦♥~_*]+/g;
+
 function cleanListingTitle(text){
-  let t = text || '';
+  const original = (text || '').trim();
+  let t = original;
+  t = t.split(' | ')[0]; // wiele ogłoszeń ma format "Tytuł | Format | Free Shipping | ..."
   t = t.replace(/[\[(][^\])]*[\])]/g, ' '); // usuń nawiasy z dopiskami
+  t = t.replace(DECOR_CHARS_RE, ' ');
+  t = t.replace(CODE_LABEL_RE, ' ');
+  t = t.replace(BARE_CODE_RE, ' ');
   for (const re of LISTING_NOISE) t = t.replace(re, ' ');
-  t = t.replace(/[-–—:|]+\s*$/, '').replace(/^\s*[-–—:|]+/, '');
+  t = t.replace(/(?:\s*[-–—:|,])+\s*$/, '').replace(/^\s*(?:[-–—:|,]\s*)+/, '');
   t = t.replace(/\s{2,}/g, ' ').trim();
-  return t;
+  return t || original; // jeśli wyczyściliśmy wszystko, zostaw oryginał do ręcznej poprawki
 }
 
 async function lookupBarcodeGeneral(code){
