@@ -24,7 +24,10 @@ Baza danych i RLS znajdują się w `schema.sql`. Dane logowania Supabase (URL, a
 Konto logowania trzeba założyć ręcznie: Supabase Dashboard → Authentication → Users → Add user (e-mail + hasło, "Auto Confirm User" zaznaczone).
 
 ## Hosting
-Plik `index.html` jest w pełni statyczny — hostowany na Netlify (repo prywatne).
+Strona (`index.html`) jest hostowana na [GitHub Pages](https://matasiaja.github.io/Biblioteczka/).
+Trzy małe funkcje serwerowe (`netlify/functions/*.mjs` — proxy do UPCitemdb, Biblioteki Narodowej
+i OMDb, m.in. żeby ominąć CORS i trzymać klucz OMDb poza publicznym kodem) mieszkają na Netlify,
+niezależnie od hostingu samej strony.
 
 ## Rozwój
 To wersja startowa (MVP) — kolejne funkcje (np. lepsze wyszukiwanie filmów/muzyki po kodzie kreskowym, zdjęcia okładek, eksport, przypomnienia o zwrotach) dojdą w miarę rozwoju projektu.
