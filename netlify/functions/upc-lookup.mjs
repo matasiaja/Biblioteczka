@@ -10,6 +10,6 @@ export default async (req) => {
   const body = await res.text();
   return new Response(body, {
     status: res.status,
-    headers: { 'Content-Type': 'application/json' }
+    headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
   });
 };

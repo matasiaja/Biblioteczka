@@ -86,9 +86,10 @@
 // ==========================================================
 const SUPABASE_URL = "https://alxwzewdsqhaszzcpkga.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFseHd6ZXdkc3FoYXN6emNwa2dhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM4NjcyNDEsImV4cCI6MjA5OTQ0MzI0MX0.dxPCsqjkzYz0zzRVJ3zHcadYTSrdhqBxfvqNj_B-el4";
-// Opcjonalnie: darmowy klucz z https://www.omdbapi.com/apikey.aspx — pozwala automatycznie
-// uzupełniać reżysera i rok premiery dla filmów po zeskanowaniu kodu kreskowego.
-const OMDB_API_KEY = "364cd20e";
+// Funkcje serwerowe (proxy do UPCitemdb / Biblioteki Narodowej / OMDb) mieszkają na Netlify —
+// strona sama jest hostowana na GitHub Pages, ale te trzy małe funkcje zostają tutaj
+// (klucz OMDb jest ustawiony jako zmienna środowiskowa na Netlify, nie w tym pliku).
+const FUNCTIONS_BASE = "https://biblioteczka-katalog.netlify.app/.netlify/functions";
 // ==========================================================
 
 let sb = null;
@@ -382,7 +383,7 @@ function cleanBnTitleFallback(t){
 async function lookupBook(code){
   // 1. Biblioteka Narodowa (najlepsze pokrycie polskich wydań)
   try {
-    const res = await fetch(`/.netlify/functions/bn-lookup?isbn=${encodeURIComponent(code)}`);
+    const res = await fetch(`${FUNCTIONS_BASE}/bn-lookup?isbn=${encodeURIComponent(code)}`);
     const data = await res.json();
     const b = data.bibs && data.bibs[0];
     if (b){
@@ -472,7 +473,7 @@ async function lookupBarcodeGeneral(code){
   // UPCitemdb - darmowe wyszukiwanie po kodzie EAN/UPC (limit ok. 100 zapytań/dzień, bez klucza)
   // Wołane przez nasz proxy (netlify/functions/upc-lookup.mjs), bo UPCitemdb blokuje CORS z przeglądarki.
   try {
-    const res = await fetch(`/.netlify/functions/upc-lookup?upc=${encodeURIComponent(code)}`);
+    const res = await fetch(`${FUNCTIONS_BASE}/upc-lookup?upc=${encodeURIComponent(code)}`);
     const data = await res.json();
     const item = data.items && data.items[0];
     if (item){
@@ -502,9 +503,9 @@ async function lookupBarcodeGeneral(code){
 }
 
 async function lookupMovieDetails(title){
-  if (!title || !OMDB_API_KEY) return null;
+  if (!title) return null;
   try {
-    const res = await fetch(`https://www.omdbapi.com/?apikey=${encodeURIComponent(OMDB_API_KEY)}&t=${encodeURIComponent(title)}&type=movie`);
+    const res = await fetch(`${FUNCTIONS_BASE}/omdb?t=${encodeURIComponent(title)}&type=movie`);
     const data = await res.json();
     if (data.Response === 'True'){
       toast('Znaleziono reżysera, rok premiery i plakat (OMDb)');
@@ -551,9 +552,6 @@ function renderAddForm(main){
 }
 
 function renderOmdbSearchBox(l){
-  if (!OMDB_API_KEY){
-    return `<div class="config-warn" style="margin:0 0 14px;padding:10px 12px;font-size:12px;">Brak klucza OMDb — dane filmu trzeba wpisać ręcznie.</div>`;
-  }
   return `
     <div class="card" style="background:var(--surface-2);margin:0 0 14px;padding:12px;">
       <label>Znajdź dokładne dane filmu (OMDb)</label>
@@ -567,9 +565,9 @@ function renderOmdbSearchBox(l){
 }
 
 async function searchOmdbTitles(query){
-  if (!query || !OMDB_API_KEY) return [];
+  if (!query) return [];
   try {
-    const res = await fetch(`https://www.omdbapi.com/?apikey=${encodeURIComponent(OMDB_API_KEY)}&s=${encodeURIComponent(query)}&type=movie`);
+    const res = await fetch(`${FUNCTIONS_BASE}/omdb?s=${encodeURIComponent(query)}&type=movie`);
     const data = await res.json();
     if (data.Response === 'True') return data.Search || [];
   } catch(e){ /* brak sieci */ }
@@ -599,7 +597,7 @@ async function doOmdbSearch(){
 
 async function selectOmdbMovie(imdbID){
   try {
-    const res = await fetch(`https://www.omdbapi.com/?apikey=${encodeURIComponent(OMDB_API_KEY)}&i=${encodeURIComponent(imdbID)}`);
+    const res = await fetch(`${FUNCTIONS_BASE}/omdb?i=${encodeURIComponent(imdbID)}`);
     const data = await res.json();
     if (data.Response !== 'True') { toast('Nie udało się pobrać danych filmu'); return; }
     state.lookup.title = data.Title || state.lookup.title;
