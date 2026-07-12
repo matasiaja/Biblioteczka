@@ -379,6 +379,18 @@ async function lookupBook(code){
   return null;
 }
 
+function detectMovieFormat(text){
+  if (/\b(blu-?ray|bd)\b/i.test(text) || /\b4k\s?u?hd\b/i.test(text)) return 'Blu-ray';
+  if (/\bvhs\b/i.test(text)) return 'VHS';
+  if (/\bdvd\b/i.test(text)) return 'DVD';
+  return '';
+}
+function detectMusicFormat(text){
+  if (/\b(vinyl|lp)\b/i.test(text)) return 'winyl';
+  if (/\bcd\b/i.test(text)) return 'CD';
+  return '';
+}
+
 async function lookupBarcodeGeneral(code){
   // UPCitemdb - darmowe wyszukiwanie po kodzie EAN/UPC (limit ok. 100 zapytań/dzień, bez klucza)
   // Wołane przez nasz proxy (netlify/functions/upc-lookup.mjs), bo UPCitemdb blokuje CORS z przeglądarki.
@@ -391,9 +403,7 @@ async function lookupBarcodeGeneral(code){
       const title = (item.title || '').toLowerCase();
       const isMusic = /music|vinyl|audio cd|album/.test(cat) || /vinyl|soundtrack/.test(title);
       const type = isMusic ? 'music' : 'movie';
-      let format = '';
-      if (type === 'movie') format = /blu-?ray/i.test(item.title||'') ? 'Blu-ray' : /vhs/i.test(item.title||'') ? 'VHS' : /dvd/i.test(item.title||'') ? 'DVD' : '';
-      else format = /vinyl/i.test(item.title||'') ? 'winyl' : /cd/i.test(item.title||'') ? 'CD' : '';
+      const format = type === 'movie' ? detectMovieFormat(item.title||'') : detectMusicFormat(item.title||'');
       let guess = {
         type,
         title: item.title || '',
