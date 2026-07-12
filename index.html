@@ -509,8 +509,46 @@ function cleanListingTitle(text){
   return t || original; // jeśli wyczyściliśmy wszystko, zostaw oryginał do ręcznej poprawki
 }
 
+// MusicBrainz — darmowa, community'owa baza wydań muzycznych (dobre pokrycie międzynarodowe,
+// dużo lepsze niż UPCitemdb dla płyt spoza USA). Obsługuje CORS bezpośrednio z przeglądarki.
+// Okładka z Cover Art Archive (coverartarchive.org) — kwadratowa miniaturka po MBID wydania.
+function detectMusicFormatFromMedia(media){
+  const fmt = ((media && media.format) || '').toLowerCase();
+  if (/vinyl|lp/.test(fmt)) return 'winyl';
+  if (/cd/.test(fmt)) return 'CD';
+  return '';
+}
+
+function mbArtistNames(release){
+  return ((release['artist-credit']) || [])
+    .map(a => a.name || (a.artist && a.artist.name))
+    .filter(Boolean)
+    .join(', ');
+}
+
+async function lookupMusicBrainzByBarcode(code){
+  try {
+    const res = await fetch(`https://musicbrainz.org/ws/2/release/?query=barcode:${encodeURIComponent(code)}&fmt=json&limit=1`);
+    const data = await res.json();
+    const r = data.releases && data.releases[0];
+    if (!r) return null;
+    toast('Znaleziono dane płyty (MusicBrainz)');
+    return {
+      type: 'music',
+      title: r.title || '',
+      creator: mbArtistNames(r),
+      format: detectMusicFormatFromMedia(r.media && r.media[0]),
+      year: r.date ? (r.date.match(/\d{4}/)||[])[0]||'' : '',
+      cover_url: `https://coverartarchive.org/release/${r.id}/front-250`
+    };
+  } catch(e){ return null; }
+}
+
 async function lookupBarcodeGeneral(code){
-  // UPCitemdb - darmowe wyszukiwanie po kodzie EAN/UPC (limit ok. 100 zapytań/dzień, bez klucza)
+  // 1. MusicBrainz po kodzie kreskowym (najlepsze pokrycie dla płyt CD/winyl)
+  const mb = await lookupMusicBrainzByBarcode(code);
+  if (mb) return mb;
+  // 2. UPCitemdb - darmowe wyszukiwanie po kodzie EAN/UPC (limit ok. 100 zapytań/dzień, bez klucza)
   // Wołane przez nasz proxy (netlify/functions/upc-lookup.mjs), bo UPCitemdb blokuje CORS z przeglądarki.
   try {
     const res = await fetch(`${FUNCTIONS_BASE}/upc-lookup?upc=${encodeURIComponent(code)}`);
@@ -539,6 +577,7 @@ async function lookupBarcodeGeneral(code){
       return guess;
     }
   } catch(e){ /* brak sieci, limit zapytań albo nie znaleziono - uzupełnisz ręcznie */ }
+  toast('Nie znaleziono tego kodu w żadnej bazie — wyszukaj tytuł ręcznie poniżej');
   return { type: 'movie', title: '', creator: '', format: '', year: '', cover_url: '' };
 }
 
@@ -574,6 +613,7 @@ function renderAddForm(main){
         <option value="music" ${l.type==='music'?'selected':''}>Muzyka</option>
       </select>
       ${l.type === 'movie' ? renderOmdbSearchBox(l) : ''}
+      ${l.type === 'music' ? renderMusicBrainzSearchBox(l) : ''}
       <label>Tytuł</label>
       <input id="f-title" value="${escapeHtml(l.title)}" placeholder="Tytuł">
       <label id="f-creator-label">${CREATOR_LABELS[l.type]}</label>
@@ -647,6 +687,65 @@ async function selectOmdbMovie(imdbID){
     toast('Uzupełniono z OMDb: ' + data.Title);
     render();
   } catch(e){ toast('Błąd połączenia z OMDb'); }
+}
+
+function renderMusicBrainzSearchBox(l){
+  return `
+    <div class="card" style="background:var(--surface-2);margin:0 0 14px;padding:12px;">
+      <label>Znajdź dokładne dane płyty (MusicBrainz)</label>
+      <div class="row">
+        <input id="mb-search-q" value="${escapeHtml(l.title||'')}" placeholder="Wpisz tytuł albumu lub wykonawcę">
+        <button class="btn small secondary" style="flex:0 0 auto;" onclick="doMusicBrainzSearch()">Szukaj</button>
+      </div>
+      <div id="mb-results"></div>
+    </div>
+  `;
+}
+
+async function searchMusicBrainzReleases(query){
+  if (!query) return [];
+  try {
+    const res = await fetch(`https://musicbrainz.org/ws/2/release/?query=${encodeURIComponent(query)}&fmt=json&limit=6`);
+    const data = await res.json();
+    return data.releases || [];
+  } catch(e){ /* brak sieci albo limit zapytań */ }
+  return [];
+}
+
+async function doMusicBrainzSearch(){
+  const q = document.getElementById('mb-search-q').value.trim();
+  const box = document.getElementById('mb-results');
+  if (!q){ return; }
+  box.innerHTML = `<div class="meta">Szukam…</div>`;
+  const results = await searchMusicBrainzReleases(q);
+  if (!results.length){
+    box.innerHTML = `<div class="meta">Brak wyników — wpisz dane ręcznie poniżej.</div>`;
+    return;
+  }
+  box.innerHTML = results.map(r => `
+    <div class="item-row" onclick='selectMusicBrainzRelease(${JSON.stringify(r.id)})'>
+      ${coverImg(`https://coverartarchive.org/release/${r.id}/front-250`)}
+      <div style="flex:1;">
+        <div class="name">${escapeHtml(r.title)}</div>
+        <div class="meta">${escapeHtml(mbArtistNames(r))}${r.date ? ' · ' + escapeHtml(r.date.slice(0,4)) : ''}</div>
+      </div>
+    </div>
+  `).join('');
+}
+
+function selectMusicBrainzRelease(mbid){
+  fetch(`https://musicbrainz.org/ws/2/release/${encodeURIComponent(mbid)}?fmt=json&inc=artist-credits+media`)
+    .then(res => res.json())
+    .then(r => {
+      state.lookup.title = r.title || state.lookup.title;
+      state.lookup.creator = mbArtistNames(r) || state.lookup.creator;
+      state.lookup.year = r.date ? (r.date.match(/\d{4}/)||[])[0]||state.lookup.year : state.lookup.year;
+      state.lookup.format = detectMusicFormatFromMedia(r.media && r.media[0]) || state.lookup.format;
+      state.lookup.cover_url = `https://coverartarchive.org/release/${mbid}/front-250`;
+      toast('Uzupełniono z MusicBrainz: ' + (r.title||''));
+      render();
+    })
+    .catch(() => toast('Błąd połączenia z MusicBrainz'));
 }
 
 function onTypeChange(){
