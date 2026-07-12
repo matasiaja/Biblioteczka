@@ -531,6 +531,7 @@ function renderAddForm(main){
         <option value="movie" ${l.type==='movie'?'selected':''}>Film</option>
         <option value="music" ${l.type==='music'?'selected':''}>Muzyka</option>
       </select>
+      ${l.type === 'movie' ? renderOmdbSearchBox(l) : ''}
       <label>Tytuł</label>
       <input id="f-title" value="${escapeHtml(l.title)}" placeholder="Tytuł">
       <label id="f-creator-label">${CREATOR_LABELS[l.type]}</label>
@@ -546,6 +547,67 @@ function renderAddForm(main){
       <button class="btn secondary" style="margin-top:8px;" onclick="cancelAdd()">Anuluj</button>
     </div>
   `;
+}
+
+function renderOmdbSearchBox(l){
+  if (!OMDB_API_KEY){
+    return `<div class="config-warn" style="margin:0 0 14px;padding:10px 12px;font-size:12px;">Brak klucza OMDb — dane filmu trzeba wpisać ręcznie.</div>`;
+  }
+  return `
+    <div class="card" style="background:var(--surface-2);margin:0 0 14px;padding:12px;">
+      <label>Znajdź dokładne dane filmu (OMDb)</label>
+      <div class="row">
+        <input id="omdb-search-q" value="${escapeHtml(l.title||'')}" placeholder="Wpisz tytuł filmu">
+        <button class="btn small secondary" style="flex:0 0 auto;" onclick="doOmdbSearch()">Szukaj</button>
+      </div>
+      <div id="omdb-results"></div>
+    </div>
+  `;
+}
+
+async function searchOmdbTitles(query){
+  if (!query || !OMDB_API_KEY) return [];
+  try {
+    const res = await fetch(`https://www.omdbapi.com/?apikey=${encodeURIComponent(OMDB_API_KEY)}&s=${encodeURIComponent(query)}&type=movie`);
+    const data = await res.json();
+    if (data.Response === 'True') return data.Search || [];
+  } catch(e){ /* brak sieci */ }
+  return [];
+}
+
+async function doOmdbSearch(){
+  const q = document.getElementById('omdb-search-q').value.trim();
+  const box = document.getElementById('omdb-results');
+  if (!q){ return; }
+  box.innerHTML = `<div class="meta">Szukam…</div>`;
+  const results = await searchOmdbTitles(q);
+  if (!results.length){
+    box.innerHTML = `<div class="meta">Brak wyników — wpisz dane ręcznie poniżej.</div>`;
+    return;
+  }
+  box.innerHTML = results.slice(0, 6).map(r => `
+    <div class="item-row" onclick="selectOmdbMovie('${r.imdbID}')">
+      ${r.Poster && r.Poster !== 'N/A' ? `<img src="${escapeHtml(r.Poster)}" alt="" class="cover">` : `<div class="cover"></div>`}
+      <div style="flex:1;">
+        <div class="name">${escapeHtml(r.Title)}</div>
+        <div class="meta">${escapeHtml(r.Year)}</div>
+      </div>
+    </div>
+  `).join('');
+}
+
+async function selectOmdbMovie(imdbID){
+  try {
+    const res = await fetch(`https://www.omdbapi.com/?apikey=${encodeURIComponent(OMDB_API_KEY)}&i=${encodeURIComponent(imdbID)}`);
+    const data = await res.json();
+    if (data.Response !== 'True') { toast('Nie udało się pobrać danych filmu'); return; }
+    state.lookup.title = data.Title || state.lookup.title;
+    state.lookup.creator = data.Director && data.Director !== 'N/A' ? data.Director : state.lookup.creator;
+    state.lookup.year = data.Year ? (data.Year.match(/\d{4}/)||[])[0]||'' : state.lookup.year;
+    state.lookup.cover_url = data.Poster && data.Poster !== 'N/A' ? data.Poster : state.lookup.cover_url;
+    toast('Uzupełniono z OMDb: ' + data.Title);
+    render();
+  } catch(e){ toast('Błąd połączenia z OMDb'); }
 }
 
 function onTypeChange(){
