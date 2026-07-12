@@ -40,6 +40,7 @@
   .btn.secondary{background:var(--surface-2);color:var(--text);border:1px solid var(--border);}
   .btn.danger{background:var(--danger);}
   .btn.small{width:auto;padding:9px 14px;font-size:13px;}
+  .btn svg{width:18px;height:18px;flex-shrink:0;}
   input,select,textarea{width:100%;background:var(--surface-2);border:1px solid var(--border);color:var(--text);border-radius:9px;padding:11px 12px;font-family:inherit;font-size:14px;margin-bottom:10px;}
   input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent);}
   label{font-size:12px;color:var(--text-dim);display:block;margin-bottom:5px;font-family:'IBM Plex Mono',monospace;}
@@ -108,7 +109,8 @@ let state = {
   scannerRunning: false,
   scannedBarcode: null,
   scannedItem: null,
-  lookup: null
+  lookup: null,
+  loanScanning: false
 };
 
 const app = document.getElementById('app');
@@ -214,6 +216,7 @@ async function setTab(tab){
   state.scannedBarcode = null;
   state.scannedItem = null;
   state.lookup = null;
+  state.loanScanning = false;
   localStorage.setItem('bib_tab', tab);
   render();
 }
@@ -283,13 +286,14 @@ function renderScan(main){
   startScanner();
 }
 
-function startScanner(){
+function startScanner(onDecode){
+  onDecode = onDecode || onBarcode;
   if (state.scannerRunning || scannerStarting) return scannerStarting;
   html5Qr = new Html5Qrcode("reader");
   scannerStarting = html5Qr.start(
     { facingMode: "environment" },
     { fps: 10, qrbox: { width: 250, height: 150 } },
-    (decodedText)=>{ onBarcode(decodedText); },
+    (decodedText)=>{ onDecode(decodedText); },
     ()=>{}
   ).then(()=>{ state.scannerRunning = true; }).catch(()=>{
     const readerEl = document.getElementById('reader');
@@ -322,9 +326,10 @@ async function onBarcode(code){
   const existing = state.items.find(i => i.barcode === code);
   if (existing){
     toast('Ta pozycja jest już w kolekcji');
-    state.scannedItem = existing;
     state.tab = 'list';
+    localStorage.setItem('bib_tab', 'list');
     render();
+    openItem(existing.id);
     return;
   }
   let guess = { type: 'book', title: '', creator: '', format: '', year: '', cover_url: '' };
@@ -341,8 +346,36 @@ function isIsbn(code){
   return /^97[89]\d{10}$/.test(code) || /^\d{9}[\dXx]$/.test(code);
 }
 
+function cleanBnTitle(t){
+  if (!t) return '';
+  return t.split(' / ')[0].trim();
+}
+
+function extractBnAuthors(a){
+  if (!a) return '';
+  const matches = a.match(/[A-ZŻŹĆĄŚĘŁÓŃ][a-ząćęłńóśźż-]+,\s*[A-ZŻŹĆĄŚĘŁÓŃ][a-ząćęłńóśźż-]+/g);
+  return matches ? [...new Set(matches)].join('; ') : a;
+}
+
 async function lookupBook(code){
-  // 1. Open Library
+  // 1. Biblioteka Narodowa (najlepsze pokrycie polskich wydań)
+  try {
+    const res = await fetch(`/.netlify/functions/bn-lookup?isbn=${encodeURIComponent(code)}`);
+    const data = await res.json();
+    const b = data.bibs && data.bibs[0];
+    if (b){
+      toast('Znaleziono dane książki (Biblioteka Narodowa)');
+      return {
+        type: 'book',
+        title: cleanBnTitle(b.title),
+        creator: extractBnAuthors(b.author),
+        format: 'papierowa miękka',
+        year: b.publicationYear ? (String(b.publicationYear).match(/\d{4}/)||[])[0]||'' : '',
+        cover_url: ''
+      };
+    }
+  } catch(e){ /* brak sieci - próbujemy dalej */ }
+  // 2. Open Library
   try {
     const res = await fetch(`https://openlibrary.org/api/books?bibkeys=ISBN:${encodeURIComponent(code)}&format=json&jscmd=data`);
     const data = await res.json();
@@ -359,7 +392,7 @@ async function lookupBook(code){
       };
     }
   } catch(e){ /* brak sieci - próbujemy dalej */ }
-  // 2. Google Books (fallback, np. dla polskich wydań spoza Open Library)
+  // 3. Google Books (fallback, np. dla wydań spoza Open Library/BN)
   try {
     const res = await fetch(`https://www.googleapis.com/books/v1/volumes?q=isbn:${encodeURIComponent(code)}`);
     const data = await res.json();
@@ -559,6 +592,7 @@ function openItem(id){
         <div class="meta" style="margin-bottom:12px;">od ${new Date(loan.borrowed_at).toLocaleDateString('pl-PL')}</div>
         <button class="btn" onclick="returnLoan('${loan.id}')">Oznacz jako zwrócone</button>
       ` : `
+        <div class="badge ok" style="margin-bottom:12px;">Dostępne</div>
         <input id="borrower-name" placeholder="Komu pożyczasz?">
         <button class="btn" onclick="lendItem('${item.id}')">Pożycz</button>
       `}
@@ -596,11 +630,29 @@ async function deleteItem(itemId){
 
 // ---------------- WYPOŻYCZENIA TAB ----------------
 function renderLoans(main){
+  if (state.loanScanning){
+    main.innerHTML = `
+      <div class="scan-frame">
+        <div id="reader"></div>
+        <div class="laser"></div>
+        <div class="corner tl"></div><div class="corner tr"></div>
+        <div class="corner bl"></div><div class="corner br"></div>
+      </div>
+      <div class="scan-hint">Zeskanuj kod, żeby oznaczyć zwrot</div>
+      <div style="margin-top:14px;">
+        <button class="btn secondary" onclick="cancelLoanScan()">Anuluj</button>
+      </div>
+    `;
+    startScanner(onLoanBarcode);
+    return;
+  }
+  const scanBtn = `<button class="btn secondary" style="margin-bottom:12px;display:flex;align-items:center;justify-content:center;gap:8px;" onclick="startLoanScan()">${icon('scan')} Zeskanuj do zwrotu</button>`;
   if (state.loans.length===0){
-    main.innerHTML = `<div class="card"><div class="empty">Nic obecnie nie jest pożyczone.</div></div>`;
+    main.innerHTML = `${scanBtn}<div class="card"><div class="empty">Nic obecnie nie jest pożyczone.</div></div>`;
     return;
   }
   main.innerHTML = `
+    ${scanBtn}
     <div class="card">
       ${state.loans.map(l=>{
         const item = state.items.find(i=>i.id===l.item_id);
@@ -614,6 +666,38 @@ function renderLoans(main){
       }).join('')}
     </div>
   `;
+}
+
+function startLoanScan(){
+  state.loanScanning = true;
+  renderTab();
+}
+
+async function cancelLoanScan(){
+  await stopScanner();
+  state.loanScanning = false;
+  renderTab();
+}
+
+async function onLoanBarcode(code){
+  await stopScanner();
+  state.loanScanning = false;
+  const item = state.items.find(i => i.barcode === code);
+  if (!item){
+    toast('Nie znaleziono takiej pozycji w kolekcji');
+    renderTab();
+    return;
+  }
+  const loan = activeLoanFor(item.id);
+  if (!loan){
+    toast('Ta pozycja nie jest obecnie wypożyczona');
+    state.tab = 'list';
+    localStorage.setItem('bib_tab', 'list');
+    render();
+    openItem(item.id);
+    return;
+  }
+  await returnLoan(loan.id);
 }
 
 // ---------------- USTAWIENIA TAB ----------------
