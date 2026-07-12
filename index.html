@@ -314,21 +314,80 @@ async function onBarcode(code){
     return;
   }
   let guess = { type: 'book', title: '', creator: '', format: '', year: '' };
+  if (isIsbn(code)){
+    guess = await lookupBook(code) || guess;
+  } else {
+    guess = await lookupBarcodeGeneral(code) || guess;
+  }
+  state.lookup = { barcode: code, ...guess };
+  render();
+}
+
+function isIsbn(code){
+  return /^97[89]\d{10}$/.test(code) || /^\d{9}[\dXx]$/.test(code);
+}
+
+async function lookupBook(code){
+  // 1. Open Library
   try {
     const res = await fetch(`https://openlibrary.org/api/books?bibkeys=ISBN:${encodeURIComponent(code)}&format=json&jscmd=data`);
     const data = await res.json();
-    const key = `ISBN:${code}`;
-    if (data[key]){
-      const b = data[key];
-      guess.title = b.title || '';
-      guess.creator = (b.authors||[]).map(a=>a.name).join(', ');
-      guess.year = b.publish_date ? (b.publish_date.match(/\d{4}/)||[])[0]||'' : '';
-      guess.format = 'papierowa miękka';
-      toast('Znaleziono dane książki');
+    const b = data[`ISBN:${code}`];
+    if (b){
+      toast('Znaleziono dane książki (Open Library)');
+      return {
+        type: 'book',
+        title: b.title || '',
+        creator: (b.authors||[]).map(a=>a.name).join(', '),
+        format: 'papierowa miękka',
+        year: b.publish_date ? (b.publish_date.match(/\d{4}/)||[])[0]||'' : ''
+      };
     }
-  } catch(e){ /* brak dostępu do sieci albo nie znaleziono - uzupełnisz ręcznie */ }
-  state.lookup = { barcode: code, ...guess };
-  render();
+  } catch(e){ /* brak sieci - próbujemy dalej */ }
+  // 2. Google Books (fallback, np. dla polskich wydań spoza Open Library)
+  try {
+    const res = await fetch(`https://www.googleapis.com/books/v1/volumes?q=isbn:${encodeURIComponent(code)}`);
+    const data = await res.json();
+    const v = data.items && data.items[0] && data.items[0].volumeInfo;
+    if (v){
+      toast('Znaleziono dane książki (Google Books)');
+      return {
+        type: 'book',
+        title: v.title || '',
+        creator: (v.authors||[]).join(', '),
+        format: 'papierowa miękka',
+        year: v.publishedDate ? (v.publishedDate.match(/\d{4}/)||[])[0]||'' : ''
+      };
+    }
+  } catch(e){ /* brak sieci albo nie znaleziono - uzupełnisz ręcznie */ }
+  return null;
+}
+
+async function lookupBarcodeGeneral(code){
+  // UPCitemdb - darmowe wyszukiwanie po kodzie EAN/UPC (limit ok. 100 zapytań/dzień, bez klucza)
+  try {
+    const res = await fetch(`https://api.upcitemdb.com/prod/trial/lookup?upc=${encodeURIComponent(code)}`);
+    const data = await res.json();
+    const item = data.items && data.items[0];
+    if (item){
+      const cat = (item.category || '').toLowerCase();
+      const title = (item.title || '').toLowerCase();
+      const isMusic = /music|vinyl|audio cd|album/.test(cat) || /vinyl|soundtrack/.test(title);
+      const type = isMusic ? 'music' : 'movie';
+      let format = '';
+      if (type === 'movie') format = /blu-?ray/i.test(item.title||'') ? 'Blu-ray' : /dvd/i.test(item.title||'') ? 'DVD' : '';
+      else format = /vinyl/i.test(item.title||'') ? 'winyl' : /cd/i.test(item.title||'') ? 'CD' : '';
+      toast('Znaleziono dane w bazie kodów kreskowych');
+      return {
+        type,
+        title: item.title || '',
+        creator: item.brand || '',
+        format,
+        year: (item.title||'').match(/\b(19|20)\d{2}\b/)?.[0] || ''
+      };
+    }
+  } catch(e){ /* brak sieci, limit zapytań albo nie znaleziono - uzupełnisz ręcznie */ }
+  return { type: 'movie', title: '', creator: '', format: '', year: '' };
 }
 
 function renderAddForm(main){
