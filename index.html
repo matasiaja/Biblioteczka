@@ -544,11 +544,35 @@ async function lookupMusicBrainzByBarcode(code){
   } catch(e){ return null; }
 }
 
+// Discogs — kolekcjonerska baza wydań muzycznych, świetne pokrycie niszowych/regionalnych
+// (np. polskich) płyt, których nie ma ani MusicBrainz, ani UPCitemdb. Obsługuje CORS.
+async function lookupDiscogsByBarcode(code){
+  try {
+    const res = await fetch(`https://api.discogs.com/database/search?barcode=${encodeURIComponent(code)}&type=release`);
+    const data = await res.json();
+    const r = data.results && data.results[0];
+    if (!r) return null;
+    let detail = null;
+    try { detail = await fetch(r.resource_url).then(x => x.json()); } catch(e){ /* zostaniemy przy skróconych danych */ }
+    const title = (detail && detail.title) || (r.title||'').split(' - ').slice(1).join(' - ') || r.title || '';
+    const creator = (detail && detail.artists && detail.artists.map(a=>a.name).join(', ')) || (r.title||'').split(' - ')[0] || '';
+    const formatText = (detail && detail.formats && detail.formats[0] && detail.formats[0].name) || (r.format && r.format[0]) || '';
+    const format = /vinyl/i.test(formatText) ? 'winyl' : /cd/i.test(formatText) ? 'CD' : '';
+    const year = String((detail && detail.year) || r.year || '').match(/\d{4}/)?.[0] || '';
+    const img = (detail && detail.images && detail.images[0] && (detail.images[0].uri150 || detail.images[0].uri)) || '';
+    toast('Znaleziono dane płyty (Discogs)');
+    return { type: 'music', title, creator, format, year, cover_url: img };
+  } catch(e){ return null; }
+}
+
 async function lookupBarcodeGeneral(code){
   // 1. MusicBrainz po kodzie kreskowym (najlepsze pokrycie dla płyt CD/winyl)
   const mb = await lookupMusicBrainzByBarcode(code);
   if (mb) return mb;
-  // 2. UPCitemdb - darmowe wyszukiwanie po kodzie EAN/UPC (limit ok. 100 zapytań/dzień, bez klucza)
+  // 2. Discogs — jeśli MusicBrainz nie znalazł (niszowe/regionalne wydania)
+  const discogs = await lookupDiscogsByBarcode(code);
+  if (discogs) return discogs;
+  // 3. UPCitemdb - darmowe wyszukiwanie po kodzie EAN/UPC (limit ok. 100 zapytań/dzień, bez klucza)
   // Wołane przez nasz proxy (netlify/functions/upc-lookup.mjs), bo UPCitemdb blokuje CORS z przeglądarki.
   try {
     const res = await fetch(`${FUNCTIONS_BASE}/upc-lookup?upc=${encodeURIComponent(code)}`);
