@@ -394,7 +394,8 @@ async function lookupBook(code){
         creator: parsed.creator,
         format: 'papierowa miękka',
         year: b.publicationYear ? (String(b.publicationYear).match(/\d{4}/)||[])[0]||'' : '',
-        cover_url: ''
+        // BN nie udostępnia okładek — próbujemy Open Library po tym samym ISBN (czasem trafia mimo braku opisu tam)
+        cover_url: `https://covers.openlibrary.org/b/isbn/${encodeURIComponent(code)}-M.jpg?default=false`
       };
     }
   } catch(e){ /* brak sieci - próbujemy dalej */ }
