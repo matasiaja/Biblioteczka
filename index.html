@@ -86,10 +86,10 @@
 // ==========================================================
 const SUPABASE_URL = "https://alxwzewdsqhaszzcpkga.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFseHd6ZXdkc3FoYXN6emNwa2dhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM4NjcyNDEsImV4cCI6MjA5OTQ0MzI0MX0.dxPCsqjkzYz0zzRVJ3zHcadYTSrdhqBxfvqNj_B-el4";
-// Funkcje serwerowe (proxy do UPCitemdb / Biblioteki Narodowej / OMDb) mieszkają na Netlify —
-// strona sama jest hostowana na GitHub Pages, ale te trzy małe funkcje zostają tutaj
-// (klucz OMDb jest ustawiony jako zmienna środowiskowa na Netlify, nie w tym pliku).
-const FUNCTIONS_BASE = "https://biblioteczka-katalog.netlify.app/.netlify/functions";
+// Funkcje serwerowe (proxy do UPCitemdb / Biblioteki Narodowej / OMDb / Google Books) mieszkają
+// na Cloudflare Workers (darmowy, hojny limit) — strona sama jest hostowana na GitHub Pages.
+// Klucze API (OMDb, Google Books) są ustawione jako sekrety w Workerze, nie w tym pliku.
+const FUNCTIONS_BASE = "https://biblioteczka-functions.mathyus-823.workers.dev";
 // ==========================================================
 
 let sb = null;
