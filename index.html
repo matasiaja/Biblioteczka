@@ -1,0 +1,506 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Biblioteczka</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" defer></script>
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js" defer></script>
+<style>
+  :root{
+    --bg:#14161A; --surface:#1C1F26; --surface-2:#262A33; --border:#333844;
+    --text:#ECEDEF; --text-dim:#9AA0AC;
+    --accent:#7C5CFF; --accent-dim:#6247CC;
+    --ok:#3DDC84; --warn:#FFB020; --danger:#FF4D4D;
+    --radius:14px;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:'Space Grotesk',sans-serif;-webkit-font-smoothing:antialiased;}
+  .mono{font-family:'IBM Plex Mono',monospace;}
+  #app{max-width:520px;margin:0 auto;min-height:100vh;display:flex;flex-direction:column;padding-bottom:78px;}
+  header.topbar{position:sticky;top:0;z-index:10;background:rgba(20,22,26,.92);backdrop-filter:blur(10px);border-bottom:1px solid var(--border);padding:16px 18px;display:flex;align-items:center;justify-content:space-between;}
+  header.topbar h1{font-size:17px;margin:0;font-weight:600;letter-spacing:.2px;}
+  header.topbar .sub{font-size:11px;color:var(--text-dim);font-family:'IBM Plex Mono',monospace;}
+  main{flex:1;padding:16px;}
+  nav.bottom{position:fixed;bottom:0;left:0;right:0;background:rgba(28,31,38,.96);backdrop-filter:blur(10px);border-top:1px solid var(--border);display:flex;max-width:520px;margin:0 auto;padding-bottom:env(safe-area-inset-bottom);}
+  nav.bottom button{flex:1;background:none;border:none;color:var(--text-dim);padding:12px 4px 10px;font-family:inherit;font-size:11px;display:flex;flex-direction:column;align-items:center;gap:4px;cursor:pointer;transition:color .15s;}
+  nav.bottom button.active{color:var(--accent);}
+  nav.bottom button svg{width:20px;height:20px;}
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px;margin-bottom:12px;}
+  .btn{background:var(--accent);color:#fff;border:none;border-radius:10px;padding:13px 18px;font-family:inherit;font-weight:600;font-size:14px;cursor:pointer;width:100%;transition:background .15s,transform .1s;}
+  .btn:active{transform:scale(.98);}
+  .btn:hover{background:var(--accent-dim);}
+  .btn.secondary{background:var(--surface-2);color:var(--text);border:1px solid var(--border);}
+  .btn.danger{background:var(--danger);}
+  .btn.small{width:auto;padding:9px 14px;font-size:13px;}
+  input,select,textarea{width:100%;background:var(--surface-2);border:1px solid var(--border);color:var(--text);border-radius:9px;padding:11px 12px;font-family:inherit;font-size:14px;margin-bottom:10px;}
+  input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent);}
+  label{font-size:12px;color:var(--text-dim);display:block;margin-bottom:5px;font-family:'IBM Plex Mono',monospace;}
+  .row{display:flex;gap:10px;}
+  .row>*{flex:1;}
+  .badge{display:inline-block;font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:600;padding:3px 8px;border-radius:6px;}
+  .badge.ok{background:rgba(61,220,132,.15);color:var(--ok);}
+  .badge.warn{background:rgba(255,176,32,.15);color:var(--warn);}
+  .badge.danger{background:rgba(255,77,77,.15);color:var(--danger);}
+  .item-row{display:flex;justify-content:space-between;align-items:center;padding:12px 0;border-bottom:1px solid var(--border);cursor:pointer;gap:10px;}
+  .item-row:last-child{border-bottom:none;}
+  .item-row .name{font-weight:500;font-size:14px;}
+  .item-row .meta{font-size:11px;color:var(--text-dim);font-family:'IBM Plex Mono',monospace;margin-top:2px;}
+  .empty{text-align:center;color:var(--text-dim);padding:40px 20px;font-size:13px;}
+  .empty svg{width:40px;height:40px;opacity:.4;margin-bottom:10px;}
+  .tabs{display:flex;gap:8px;margin-bottom:14px;}
+  .tabs button{flex:1;background:var(--surface-2);border:1px solid var(--border);color:var(--text-dim);border-radius:9px;padding:9px;font-family:inherit;font-size:12px;cursor:pointer;}
+  .tabs button.active{background:var(--accent);border-color:var(--accent);color:#fff;}
+  /* scanner */
+  #reader{width:100%;border-radius:var(--radius);overflow:hidden;background:#000;position:relative;}
+  .scan-frame{position:relative;}
+  .scan-hint{text-align:center;color:var(--text-dim);font-size:12px;margin-top:12px;font-family:'IBM Plex Mono',monospace;}
+  .laser{position:absolute;left:8%;right:8%;top:50%;height:2px;background:var(--accent);box-shadow:0 0 8px var(--accent);animation:sweep 1.8s ease-in-out infinite;pointer-events:none;z-index:5;}
+  @keyframes sweep{0%,100%{top:30%;}50%{top:70%;}}
+  .corner{position:absolute;width:26px;height:26px;border-color:var(--accent);z-index:5;pointer-events:none;}
+  .corner.tl{top:8%;left:8%;border-top:3px solid var(--accent);border-left:3px solid var(--accent);border-radius:6px 0 0 0;}
+  .corner.tr{top:8%;right:8%;border-top:3px solid var(--accent);border-right:3px solid var(--accent);border-radius:0 6px 0 0;}
+  .corner.bl{bottom:8%;left:8%;border-bottom:3px solid var(--accent);border-left:3px solid var(--accent);border-radius:0 0 0 6px;}
+  .corner.br{bottom:8%;right:8%;border-bottom:3px solid var(--accent);border-right:3px solid var(--accent);border-radius:0 0 6px 0;}
+  .toast{position:fixed;bottom:90px;left:50%;transform:translateX(-50%);background:var(--surface-2);border:1px solid var(--border);padding:10px 16px;border-radius:10px;font-size:13px;z-index:50;box-shadow:0 4px 20px rgba(0,0,0,.4);max-width:90%;text-align:center;}
+  .link{color:var(--accent);background:none;border:none;font-family:inherit;font-size:13px;cursor:pointer;padding:0;}
+  .section-title{font-size:12px;color:var(--text-dim);text-transform:uppercase;letter-spacing:.6px;font-family:'IBM Plex Mono',monospace;margin:4px 0 10px;}
+  .config-warn{background:rgba(255,176,32,.1);border:1px solid var(--warn);color:var(--warn);border-radius:10px;padding:14px;font-size:13px;line-height:1.5;margin:16px;}
+  .cover{width:44px;height:60px;border-radius:5px;object-fit:cover;background:var(--surface-2);flex-shrink:0;}
+</style>
+</head>
+<body>
+<div id="app"></div>
+
+<script defer>
+// ==========================================================
+// KONFIGURACJA
+// ==========================================================
+const SUPABASE_URL = "https://alxwzewdsqhaszzcpkga.supabase.co";
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFseHd6ZXdkc3FoYXN6emNwa2dhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM4NjcyNDEsImV4cCI6MjA5OTQ0MzI0MX0.dxPCsqjkzYz0zzRVJ3zHcadYTSrdhqBxfvqNj_B-el4";
+// ==========================================================
+
+let sb = null;
+let session = null;
+const TYPE_LABELS = { book: 'Książka', movie: 'Film', music: 'Muzyka' };
+const TYPE_FORMATS = {
+  book: ['papierowa miękka', 'papierowa twarda'],
+  movie: ['Blu-ray', 'DVD'],
+  music: ['CD', 'winyl']
+};
+let state = {
+  tab: localStorage.getItem('bib_tab') || 'scan',
+  typeFilter: localStorage.getItem('bib_type_filter') || 'all',
+  items: [],
+  loans: [],
+  scannerRunning: false,
+  scannedBarcode: null,
+  scannedItem: null,
+  lookup: null
+};
+
+const app = document.getElementById('app');
+
+function configured(){
+  return SUPABASE_URL && !SUPABASE_URL.startsWith('TU_') && SUPABASE_ANON_KEY && !SUPABASE_ANON_KEY.startsWith('TU_');
+}
+
+function escapeHtml(s){
+  if (s === null || s === undefined) return '';
+  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+function icon(name){
+  const icons = {
+    scan: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2M7 12h10"/></svg>',
+    list: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>',
+    loans: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>',
+    settings: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>',
+    book: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>',
+    movie: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="18" rx="2"/><path d="M7 3v18M17 3v18M2 8h5M2 16h5M17 8h5M17 16h5"/></svg>',
+    music: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>'
+  };
+  return icons[name] || '';
+}
+
+function toast(msg){
+  const t = document.createElement('div');
+  t.className = 'toast';
+  t.textContent = msg;
+  document.body.appendChild(t);
+  setTimeout(()=>t.remove(), 2400);
+}
+
+// ---------------- BOOT ----------------
+async function boot(){
+  if (!configured()){
+    renderNotConfigured();
+    return;
+  }
+  sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  const { data } = await sb.auth.getSession();
+  session = data.session;
+  sb.auth.onAuthStateChange((_e, s)=>{ session = s; render(); });
+  if (session){ await loadAll(); }
+  render();
+}
+
+function renderNotConfigured(){
+  app.innerHTML = `
+    <header class="topbar"><h1>Biblioteczka</h1></header>
+    <div class="config-warn">
+      <strong>Appka jeszcze nie jest podłączona do bazy danych.</strong><br><br>
+      Uzupełnij <span class="mono">SUPABASE_URL</span> i <span class="mono">SUPABASE_ANON_KEY</span>
+      na górze pliku i uruchom <span class="mono">schema.sql</span> w SQL Editorze projektu Supabase.
+    </div>`;
+}
+
+async function loadAll(){
+  const [{data:items}, {data:loans}] = await Promise.all([
+    sb.from('items').select('*').order('title'),
+    sb.from('loans').select('*').is('returned_at', null)
+  ]);
+  state.items = items || [];
+  state.loans = loans || [];
+}
+
+function activeLoanFor(itemId){
+  return state.loans.find(l => l.item_id === itemId);
+}
+
+// ---------------- RENDER SHELL ----------------
+function render(){
+  if (!session){ renderLogin(); return; }
+  app.innerHTML = `
+    <header class="topbar">
+      <div><h1>Biblioteczka</h1><div class="sub">${escapeHtml(session.user.email)}</div></div>
+      <button class="link" onclick="logout()">Wyloguj</button>
+    </header>
+    <main id="main"></main>
+    <nav class="bottom">
+      ${navBtn('scan','Dodaj')}
+      ${navBtn('list','Kolekcja')}
+      ${navBtn('loans','Wypożyczenia')}
+      ${navBtn('settings','Ustawienia')}
+    </nav>
+  `;
+  renderTab();
+}
+
+function navBtn(tab,label){
+  const active = state.tab===tab ? 'active' : '';
+  const iconName = tab==='scan'?'scan':tab==='list'?'list':tab==='loans'?'loans':'settings';
+  return `<button class="${active}" onclick="setTab('${tab}')">${icon(iconName)}<span>${label}</span></button>`;
+}
+
+async function setTab(tab){
+  await stopScanner();
+  state.tab = tab;
+  state.scannedBarcode = null;
+  state.scannedItem = null;
+  state.lookup = null;
+  localStorage.setItem('bib_tab', tab);
+  render();
+}
+
+function renderTab(){
+  const main = document.getElementById('main');
+  if (state.tab==='scan') renderScan(main);
+  else if (state.tab==='list') renderList(main);
+  else if (state.tab==='loans') renderLoans(main);
+  else if (state.tab==='settings') renderSettings(main);
+}
+
+// ---------------- LOGIN ----------------
+function renderLogin(){
+  app.innerHTML = `
+    <div style="max-width:340px;margin:80px auto;padding:0 20px;">
+      <h1 style="text-align:center;margin-bottom:4px;">📚 Biblioteczka</h1>
+      <div style="text-align:center;color:var(--text-dim);font-size:12px;font-family:'IBM Plex Mono',monospace;margin-bottom:24px;">katalog książek, filmów i muzyki</div>
+      <div class="card">
+        <label>E-mail</label>
+        <input id="login-email" type="email" placeholder="ty@przyklad.pl">
+        <label>Hasło</label>
+        <input id="login-pass" type="password" placeholder="••••••••">
+        <button class="btn" onclick="login()">Zaloguj się</button>
+        <div id="login-err" style="color:var(--danger);font-size:12px;margin-top:10px;"></div>
+      </div>
+    </div>`;
+}
+
+async function login(){
+  const email = document.getElementById('login-email').value.trim();
+  const password = document.getElementById('login-pass').value;
+  const { error } = await sb.auth.signInWithPassword({ email, password });
+  if (error){ document.getElementById('login-err').textContent = 'Błędny e-mail lub hasło.'; return; }
+  await loadAll();
+  render();
+}
+
+async function logout(){
+  await sb.auth.signOut();
+  render();
+}
+
+// ---------------- SCAN / DODAJ TAB ----------------
+let html5Qr = null;
+let scannerStarting = null;
+
+function renderScan(main){
+  if (state.lookup){
+    renderAddForm(main);
+    return;
+  }
+  main.innerHTML = `
+    <div class="scan-frame">
+      <div id="reader"></div>
+      <div class="laser"></div>
+      <div class="corner tl"></div><div class="corner tr"></div>
+      <div class="corner bl"></div><div class="corner br"></div>
+    </div>
+    <div class="scan-hint">Zeskanuj kod kreskowy okładki / pudełka</div>
+    <div style="margin-top:14px;">
+      <button class="btn secondary" onclick="manualBarcode()">Wpisz kod ręcznie</button>
+      <button class="btn secondary" style="margin-top:8px;" onclick="skipBarcode()">Dodaj bez kodu</button>
+    </div>
+  `;
+  startScanner();
+}
+
+function startScanner(){
+  if (state.scannerRunning || scannerStarting) return scannerStarting;
+  html5Qr = new Html5Qrcode("reader");
+  scannerStarting = html5Qr.start(
+    { facingMode: "environment" },
+    { fps: 10, qrbox: { width: 250, height: 150 } },
+    (decodedText)=>{ onBarcode(decodedText); },
+    ()=>{}
+  ).then(()=>{ state.scannerRunning = true; }).catch(()=>{
+    const readerEl = document.getElementById('reader');
+    if (readerEl) readerEl.innerHTML = '<div class="empty">Brak dostępu do kamery. Sprawdź uprawnienia przeglądarki albo wpisz kod ręcznie.</div>';
+  }).finally(()=>{ scannerStarting = null; });
+  return scannerStarting;
+}
+
+async function stopScanner(){
+  if (scannerStarting) await scannerStarting;
+  if (html5Qr && state.scannerRunning){
+    state.scannerRunning = false;
+    try { await html5Qr.stop(); await html5Qr.clear(); } catch(e){}
+  }
+  html5Qr = null;
+}
+
+function manualBarcode(){
+  const code = prompt('Wpisz kod kreskowy:');
+  if (code) onBarcode(code.trim());
+}
+
+function skipBarcode(){
+  state.lookup = { barcode: null, type: 'book', title: '', creator: '', format: '', year: '' };
+  render();
+}
+
+async function onBarcode(code){
+  await stopScanner();
+  const existing = state.items.find(i => i.barcode === code);
+  if (existing){
+    toast('Ta pozycja jest już w kolekcji');
+    state.scannedItem = existing;
+    state.tab = 'list';
+    render();
+    return;
+  }
+  let guess = { type: 'book', title: '', creator: '', format: '', year: '' };
+  try {
+    const res = await fetch(`https://openlibrary.org/api/books?bibkeys=ISBN:${encodeURIComponent(code)}&format=json&jscmd=data`);
+    const data = await res.json();
+    const key = `ISBN:${code}`;
+    if (data[key]){
+      const b = data[key];
+      guess.title = b.title || '';
+      guess.creator = (b.authors||[]).map(a=>a.name).join(', ');
+      guess.year = b.publish_date ? (b.publish_date.match(/\d{4}/)||[])[0]||'' : '';
+      guess.format = 'papierowa miękka';
+      toast('Znaleziono dane książki');
+    }
+  } catch(e){ /* brak dostępu do sieci albo nie znaleziono - uzupełnisz ręcznie */ }
+  state.lookup = { barcode: code, ...guess };
+  render();
+}
+
+function renderAddForm(main){
+  const l = state.lookup;
+  main.innerHTML = `
+    <div class="section-title">Nowa pozycja</div>
+    <div class="card">
+      ${l.barcode ? `<label>Kod kreskowy</label><input value="${escapeHtml(l.barcode)}" disabled class="mono">` : ''}
+      <label>Rodzaj</label>
+      <select id="f-type">
+        <option value="book" ${l.type==='book'?'selected':''}>Książka</option>
+        <option value="movie" ${l.type==='movie'?'selected':''}>Film</option>
+        <option value="music" ${l.type==='music'?'selected':''}>Muzyka</option>
+      </select>
+      <label>Tytuł</label>
+      <input id="f-title" value="${escapeHtml(l.title)}" placeholder="Tytuł">
+      <label>Autor / reżyser / artysta</label>
+      <input id="f-creator" value="${escapeHtml(l.creator)}" placeholder="Kto stworzył">
+      <label>Format</label>
+      <input id="f-format" value="${escapeHtml(l.format)}" placeholder="np. Blu-ray, CD, twarda oprawa">
+      <label>Rok</label>
+      <input id="f-year" value="${escapeHtml(l.year)}" placeholder="np. 2020" inputmode="numeric">
+      <button class="btn" onclick="saveItem()">Zapisz do kolekcji</button>
+      <button class="btn secondary" style="margin-top:8px;" onclick="cancelAdd()">Anuluj</button>
+    </div>
+  `;
+}
+
+function cancelAdd(){
+  state.lookup = null;
+  render();
+}
+
+async function saveItem(){
+  const l = state.lookup;
+  const title = document.getElementById('f-title').value.trim();
+  if (!title){ toast('Podaj tytuł'); return; }
+  const payload = {
+    barcode: l.barcode || null,
+    type: document.getElementById('f-type').value,
+    title,
+    creator: document.getElementById('f-creator').value.trim() || null,
+    format: document.getElementById('f-format').value.trim() || null,
+    year: parseInt(document.getElementById('f-year').value) || null
+  };
+  const { error } = await sb.from('items').insert(payload);
+  if (error){ toast('Błąd zapisu: ' + error.message); return; }
+  await loadAll();
+  state.lookup = null;
+  toast('Dodano do kolekcji');
+  render();
+}
+
+// ---------------- KOLEKCJA TAB ----------------
+function renderList(main){
+  const filtered = state.typeFilter==='all' ? state.items : state.items.filter(i=>i.type===state.typeFilter);
+  main.innerHTML = `
+    <div class="tabs">
+      ${['all','book','movie','music'].map(t=>`<button class="${state.typeFilter===t?'active':''}" onclick="setTypeFilter('${t}')">${t==='all'?'Wszystko':TYPE_LABELS[t]}</button>`).join('')}
+    </div>
+    <div class="card">
+      ${filtered.length===0 ? `<div class="empty">Brak pozycji w tej kategorii.</div>` :
+        filtered.map(i=>{
+          const loan = activeLoanFor(i.id);
+          return `<div class="item-row" onclick="openItem('${i.id}')">
+            <div>
+              <div class="name">${icon(i.type)} ${escapeHtml(i.title)}</div>
+              <div class="meta">${escapeHtml(i.creator||'—')}${i.format?' · '+escapeHtml(i.format):''}${i.year?' · '+i.year:''}</div>
+            </div>
+            ${loan ? `<span class="badge warn">u: ${escapeHtml(loan.borrower_name)}</span>` : ''}
+          </div>`;
+        }).join('')}
+    </div>
+  `;
+}
+
+function setTypeFilter(t){
+  state.typeFilter = t;
+  localStorage.setItem('bib_type_filter', t);
+  renderTab();
+}
+
+function openItem(id){
+  const item = state.items.find(i=>i.id===id);
+  if (!item) return;
+  const loan = activeLoanFor(id);
+  const main = document.getElementById('main');
+  main.innerHTML = `
+    <button class="link" onclick="renderTab()">&larr; Wróć do listy</button>
+    <div class="card" style="margin-top:12px;">
+      <div class="section-title">${TYPE_LABELS[item.type]}</div>
+      <h2 style="margin:0 0 4px;">${escapeHtml(item.title)}</h2>
+      <div class="meta mono" style="color:var(--text-dim);margin-bottom:14px;">${escapeHtml(item.creator||'—')}${item.format?' · '+escapeHtml(item.format):''}${item.year?' · '+item.year:''}${item.barcode?' · '+escapeHtml(item.barcode):''}</div>
+      ${loan ? `
+        <div class="badge warn" style="margin-bottom:10px;">Wypożyczone: ${escapeHtml(loan.borrower_name)}</div>
+        <div class="meta" style="margin-bottom:12px;">od ${new Date(loan.borrowed_at).toLocaleDateString('pl-PL')}</div>
+        <button class="btn" onclick="returnLoan('${loan.id}')">Oznacz jako zwrócone</button>
+      ` : `
+        <input id="borrower-name" placeholder="Komu pożyczasz?">
+        <button class="btn" onclick="lendItem('${item.id}')">Pożycz</button>
+      `}
+      <button class="btn secondary" style="margin-top:8px;" onclick="deleteItem('${item.id}')">Usuń z kolekcji</button>
+    </div>
+  `;
+}
+
+async function lendItem(itemId){
+  const name = document.getElementById('borrower-name').value.trim();
+  if (!name){ toast('Podaj komu pożyczasz'); return; }
+  const { error } = await sb.from('loans').insert({ item_id: itemId, borrower_name: name });
+  if (error){ toast('Błąd: ' + error.message); return; }
+  await loadAll();
+  toast('Zapisano wypożyczenie');
+  openItem(itemId);
+}
+
+async function returnLoan(loanId){
+  const { error } = await sb.from('loans').update({ returned_at: new Date().toISOString() }).eq('id', loanId);
+  if (error){ toast('Błąd: ' + error.message); return; }
+  await loadAll();
+  toast('Oznaczono zwrot');
+  renderTab();
+}
+
+async function deleteItem(itemId){
+  if (!confirm('Na pewno usunąć tę pozycję z kolekcji?')) return;
+  const { error } = await sb.from('items').delete().eq('id', itemId);
+  if (error){ toast('Błąd: ' + error.message); return; }
+  await loadAll();
+  toast('Usunięto');
+  renderTab();
+}
+
+// ---------------- WYPOŻYCZENIA TAB ----------------
+function renderLoans(main){
+  if (state.loans.length===0){
+    main.innerHTML = `<div class="card"><div class="empty">Nic obecnie nie jest pożyczone.</div></div>`;
+    return;
+  }
+  main.innerHTML = `
+    <div class="card">
+      ${state.loans.map(l=>{
+        const item = state.items.find(i=>i.id===l.item_id);
+        return `<div class="item-row" onclick="openItem('${l.item_id}')">
+          <div>
+            <div class="name">${escapeHtml(item ? item.title : '—')}</div>
+            <div class="meta">u: ${escapeHtml(l.borrower_name)} · od ${new Date(l.borrowed_at).toLocaleDateString('pl-PL')}</div>
+          </div>
+          <button class="btn small secondary" onclick="event.stopPropagation();returnLoan('${l.id}')">Zwrot</button>
+        </div>`;
+      }).join('')}
+    </div>
+  `;
+}
+
+// ---------------- USTAWIENIA TAB ----------------
+function renderSettings(main){
+  main.innerHTML = `
+    <div class="card">
+      <div class="section-title">Konto</div>
+      <div class="meta" style="margin-bottom:14px;">${escapeHtml(session.user.email)}</div>
+      <button class="btn secondary" onclick="logout()">Wyloguj się</button>
+    </div>
+    <div class="card">
+      <div class="section-title">Statystyki</div>
+      <div class="meta">Pozycji w kolekcji: ${state.items.length}</div>
+      <div class="meta">Aktualnie pożyczone: ${state.loans.length}</div>
+    </div>
+  `;
+}
+
+boot();
+</script>
+</body>
+</html>
