@@ -56,6 +56,23 @@ async function handleGoogleBooks(url, env) {
   return json(body, res.status);
 }
 
+async function handleTmdb(url, env) {
+  const key = env.TMDB_API_KEY;
+  if (!key) return json({ success: false, status_message: 'TMDB_API_KEY not configured' });
+  // s=tytuł -> wyszukiwanie; i=id filmu -> szczegóły
+  const id = url.searchParams.get('i');
+  const tmdbUrl = new URL(id
+    ? `https://api.themoviedb.org/3/movie/${encodeURIComponent(id)}`
+    : `https://api.themoviedb.org/3/search/movie`);
+  tmdbUrl.searchParams.set('api_key', key);
+  tmdbUrl.searchParams.set('language', 'pl-PL');
+  const q = url.searchParams.get('s');
+  if (q) tmdbUrl.searchParams.set('query', q);
+  if (id) tmdbUrl.searchParams.set('append_to_response', 'credits');
+  const res = await fetch(tmdbUrl.toString());
+  return json(await res.text(), res.status);
+}
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
@@ -66,6 +83,7 @@ export default {
     if (url.pathname.endsWith('/bn-lookup')) return handleBnLookup(url);
     if (url.pathname.endsWith('/omdb')) return handleOmdb(url, env);
     if (url.pathname.endsWith('/google-books')) return handleGoogleBooks(url, env);
+    if (url.pathname.endsWith('/tmdb')) return handleTmdb(url, env);
     return json({ error: 'not found' }, 404);
   }
 };
