@@ -41,6 +41,10 @@
   .btn.danger{background:var(--danger);}
   .btn.small{width:auto;padding:9px 14px;font-size:13px;}
   .btn svg{width:18px;height:18px;flex-shrink:0;}
+  .icon-btn{background:none;border:none;color:var(--text-dim);cursor:pointer;padding:6px;display:flex;align-items:center;justify-content:center;border-radius:8px;transition:color .15s,background .15s;}
+  .icon-btn svg{width:20px;height:20px;}
+  .icon-btn:hover{color:var(--text);background:var(--surface-2);}
+  .icon-btn.active{color:var(--accent);}
   input,select,textarea{width:100%;background:var(--surface-2);border:1px solid var(--border);color:var(--text);border-radius:9px;padding:11px 12px;font-family:inherit;font-size:14px;margin-bottom:10px;}
   input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent);}
   label{font-size:12px;color:var(--text-dim);display:block;margin-bottom:5px;font-family:'IBM Plex Mono',monospace;}
@@ -113,7 +117,9 @@ let state = {
   lookup: null,
   loanScanning: false,
   selectMode: false,
-  selectedIds: []
+  selectedIds: [],
+  searchMode: false,
+  searchQuery: ''
 };
 
 const app = document.getElementById('app');
@@ -135,7 +141,9 @@ function icon(name){
     settings: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>',
     book: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>',
     movie: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="18" rx="2"/><path d="M7 3v18M17 3v18M2 8h5M2 16h5M17 8h5M17 16h5"/></svg>',
-    music: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>'
+    music: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>',
+    search: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>',
+    x: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>'
   };
   return icons[name] || '';
 }
@@ -194,7 +202,10 @@ function render(){
         <img src="logo.svg" alt="Biblioteczka" style="width:32px;height:32px;border-radius:8px;">
         <div><h1>Biblioteczka</h1><div class="sub">${escapeHtml(session.user.email)}</div></div>
       </div>
-      <button class="link" onclick="logout()">Wyloguj</button>
+      <div style="display:flex;align-items:center;gap:8px;">
+        <button class="icon-btn ${state.searchMode ? 'active' : ''}" onclick="toggleSearch()" title="Szukaj w kolekcji">${icon(state.searchMode ? 'x' : 'search')}</button>
+        <button class="link" onclick="logout()">Wyloguj</button>
+      </div>
     </header>
     <main id="main"></main>
     <nav class="bottom">
@@ -222,6 +233,8 @@ async function setTab(tab){
   state.loanScanning = false;
   state.selectMode = false;
   state.selectedIds = [];
+  state.searchMode = false;
+  state.searchQuery = '';
   localStorage.setItem('bib_tab', tab);
   if (tab === 'list' || tab === 'loans'){
     await loadAll(); // odśwież — inne urządzenie (np. telefon) mogło coś dodać/zmienić
@@ -232,6 +245,7 @@ async function setTab(tab){
 function renderTab(){
   const main = document.getElementById('main');
   if (state.lookup && state.lookup.editingId){ renderAddForm(main); return; }
+  if (state.searchMode){ renderSearch(main); return; }
   if (state.tab==='scan') renderScan(main);
   else if (state.tab==='list') renderList(main);
   else if (state.tab==='loans') renderLoans(main);
@@ -1109,6 +1123,52 @@ function setTypeFilter(t){
   state.typeFilter = t;
   localStorage.setItem('bib_type_filter', t);
   renderTab();
+}
+
+// ---------------- SZUKAJ (dostępne z każdego ekranu) ----------------
+function toggleSearch(){
+  state.searchMode = !state.searchMode;
+  if (!state.searchMode) state.searchQuery = '';
+  render();
+}
+
+function onSearchInput(){
+  const el = document.getElementById('search-q');
+  state.searchQuery = el.value;
+  renderTab();
+  const moved = document.getElementById('search-q');
+  if (moved){ moved.focus(); moved.setSelectionRange(moved.value.length, moved.value.length); }
+}
+
+function renderSearch(main){
+  const q = (state.searchQuery || '').trim().toLowerCase();
+  const results = q ? state.items.filter(i =>
+    (i.title||'').toLowerCase().includes(q) ||
+    (i.creator||'').toLowerCase().includes(q) ||
+    (i.publisher||'').toLowerCase().includes(q) ||
+    (i.barcode||'').toLowerCase().includes(q) ||
+    (i.index_number||'').toLowerCase().includes(q)
+  ) : [];
+  main.innerHTML = `
+    <input id="search-q" value="${escapeHtml(state.searchQuery||'')}" placeholder="Szukaj: tytuł, autor, wydawnictwo, kod…" oninput="onSearchInput()" style="margin-bottom:14px;">
+    <div class="card">
+      ${!q ? `<div class="empty">Zacznij pisać, żeby przeszukać całą kolekcję.</div>` :
+        results.length===0 ? `<div class="empty">Brak wyników dla "${escapeHtml(state.searchQuery)}"</div>` :
+        results.map(i=>{
+          const loan = activeLoanFor(i.id);
+          return `<div class="item-row" onclick="openItem('${i.id}')">
+            ${i.cover_url ? coverImg(i.cover_url) : `<div class="cover" style="display:flex;align-items:center;justify-content:center;color:var(--text-dim);">${icon(i.type)}</div>`}
+            <div style="flex:1;">
+              <div class="name">${escapeHtml(i.title)}</div>
+              <div class="meta">${escapeHtml(i.creator||'—')}${i.format?' · '+escapeHtml(i.format):''}${i.year?' · '+i.year:''}</div>
+            </div>
+            ${loan ? `<span class="badge warn">u: ${escapeHtml(loan.borrower_name)}</span>` : ''}
+          </div>`;
+        }).join('')}
+    </div>
+  `;
+  const input = document.getElementById('search-q');
+  if (input) input.focus();
 }
 
 function toggleSelectMode(){
