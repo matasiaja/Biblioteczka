@@ -675,6 +675,24 @@ async function lookupMovieDetails(title){
     }
     logStep('OMDb', 'nie znaleziono po tytule "' + title + '"');
   } catch(e){ logStep('OMDb', 'błąd sieci'); }
+  // Zapasowo TMDb — czasem trafia tam, gdzie OMDb nie (i ma polskie tytuły)
+  try {
+    const results = await searchTmdbTitles(title);
+    const r = results && results[0];
+    if (r){
+      const detail = await fetch(`${FUNCTIONS_BASE}/tmdb?i=${encodeURIComponent(r.id)}`).then(x => x.json()).catch(() => null);
+      const director = detail && detail.credits && detail.credits.crew ? detail.credits.crew.find(c => c.job === 'Director') : null;
+      logStep('TMDb', 'znaleziono');
+      toast('Znaleziono dane filmu (TMDb)');
+      return {
+        title: (detail && detail.title) || r.title || title,
+        creator: director ? director.name : '',
+        year: (detail && detail.release_date) ? detail.release_date.slice(0,4) : (r.release_date||'').slice(0,4),
+        cover_url: (detail && detail.poster_path) ? `https://image.tmdb.org/t/p/w342${detail.poster_path}` : (r.poster_path ? `https://image.tmdb.org/t/p/w342${r.poster_path}` : undefined)
+      };
+    }
+    logStep('TMDb', 'nie znaleziono po tytule "' + title + '"');
+  } catch(e){ logStep('TMDb', 'błąd sieci'); }
   return null;
 }
 
@@ -711,6 +729,7 @@ function renderAddForm(main){
         <option value="music" ${l.type==='music'?'selected':''}>Muzyka</option>
       </select>
       ${l.type === 'movie' ? renderOmdbSearchBox(l) : ''}
+      ${l.type === 'movie' ? renderTmdbSearchBox(l) : ''}
       ${l.type === 'music' ? renderMusicBrainzSearchBox(l) : ''}
       <label>Tytuł</label>
       <input id="f-title" value="${escapeHtml(l.title)}" placeholder="Tytuł">
@@ -785,6 +804,65 @@ async function selectOmdbMovie(imdbID){
     toast('Uzupełniono z OMDb: ' + data.Title);
     render();
   } catch(e){ toast('Błąd połączenia z OMDb'); }
+}
+
+function renderTmdbSearchBox(l){
+  return `
+    <div class="card" style="background:var(--surface-2);margin:0 0 14px;padding:12px;">
+      <label>Znajdź dokładne dane filmu (TMDb — polskie tytuły)</label>
+      <div class="row">
+        <input id="tmdb-search-q" value="${escapeHtml(l.title||'')}" placeholder="Wpisz tytuł filmu">
+        <button class="btn small secondary" style="flex:0 0 auto;" onclick="doTmdbSearch()">Szukaj</button>
+      </div>
+      <div id="tmdb-results"></div>
+    </div>
+  `;
+}
+
+async function searchTmdbTitles(query){
+  if (!query) return [];
+  try {
+    const res = await fetch(`${FUNCTIONS_BASE}/tmdb?s=${encodeURIComponent(query)}`);
+    const data = await res.json();
+    return data.results || [];
+  } catch(e){ /* brak sieci */ }
+  return [];
+}
+
+async function doTmdbSearch(){
+  const q = document.getElementById('tmdb-search-q').value.trim();
+  const box = document.getElementById('tmdb-results');
+  if (!q){ return; }
+  box.innerHTML = `<div class="meta">Szukam…</div>`;
+  const results = await searchTmdbTitles(q);
+  if (!results.length){
+    box.innerHTML = `<div class="meta">Brak wyników — wpisz dane ręcznie poniżej.</div>`;
+    return;
+  }
+  box.innerHTML = results.slice(0, 6).map(r => `
+    <div class="item-row" onclick="selectTmdbMovie(${r.id})">
+      ${r.poster_path ? `<img src="https://image.tmdb.org/t/p/w92${escapeHtml(r.poster_path)}" alt="" class="cover">` : `<div class="cover"></div>`}
+      <div style="flex:1;">
+        <div class="name">${escapeHtml(r.title)}</div>
+        <div class="meta">${escapeHtml((r.release_date||'').slice(0,4))}</div>
+      </div>
+    </div>
+  `).join('');
+}
+
+async function selectTmdbMovie(id){
+  try {
+    const res = await fetch(`${FUNCTIONS_BASE}/tmdb?i=${encodeURIComponent(id)}`);
+    const data = await res.json();
+    if (!data.id) { toast('Nie udało się pobrać danych filmu'); return; }
+    const director = data.credits && data.credits.crew ? data.credits.crew.find(c => c.job === 'Director') : null;
+    state.lookup.title = data.title || state.lookup.title;
+    state.lookup.creator = director ? director.name : state.lookup.creator;
+    state.lookup.year = data.release_date ? data.release_date.slice(0,4) : state.lookup.year;
+    state.lookup.cover_url = data.poster_path ? `https://image.tmdb.org/t/p/w342${data.poster_path}` : state.lookup.cover_url;
+    toast('Uzupełniono z TMDb: ' + data.title);
+    render();
+  } catch(e){ toast('Błąd połączenia z TMDb'); }
 }
 
 function renderMusicBrainzSearchBox(l){
