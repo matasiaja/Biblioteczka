@@ -342,7 +342,7 @@ function manualBarcode(){
 }
 
 function skipBarcode(){
-  state.lookup = { barcode: null, type: 'book', title: '', creator: '', format: '', year: '', cover_url: '' };
+  state.lookup = { barcode: null, type: 'book', title: '', creator: '', publisher: '', format: '', year: '', cover_url: '' };
   render();
 }
 
@@ -381,7 +381,7 @@ async function onBarcode(code){
   if (!isValidBarcodeChecksum(code)){
     toast(`Kod ${code} ma niepoprawną sumę kontrolną — kamera prawdopodobnie źle odczytała cyfrę. Popraw go poniżej albo zeskanuj jeszcze raz.`);
   }
-  let guess = { type: 'book', title: '', creator: '', format: '', year: '', cover_url: '' };
+  let guess = { type: 'book', title: '', creator: '', publisher: '', format: '', year: '', cover_url: '' };
   if (isIsbn(code)){
     guess = await lookupBook(code) || guess;
   } else {
@@ -399,11 +399,16 @@ function stripTrailingPunct(s){
   return (s||'').replace(/[\s:;,/]+$/, '').trim();
 }
 
-// Bibioteka Narodowa udostępnia pola MARC — pole 245 (tytuł) i 100 (główny autor)
-// są dużo dokładniejsze niż spłaszczone pola "title"/"author" z odpowiedzi.
+function cleanPublisherName(s){
+  return stripTrailingPunct((s||'').trim()).replace(/^["'„]+|["'”]+$/g, '').trim();
+}
+
+// Bibioteka Narodowa udostępnia pola MARC — pole 245 (tytuł), 100 (główny autor) i 260/264
+// (wydawca, podpole b) są dużo dokładniejsze niż spłaszczone pola z odpowiedzi.
 function parseBnMarc(bib){
   const fields = (bib.marc && bib.marc.fields) || [];
   let title = '';
+  let publisher = '';
   const authors = [];
   for (const f of fields){
     if (f['245'] && !title){
@@ -416,10 +421,16 @@ function parseBnMarc(bib){
       const aPart = sub.find(s => s.a)?.a;
       if (aPart) authors.push(stripTrailingPunct(aPart));
     }
+    if ((f['260'] || f['264']) && !publisher){
+      const sub = (f['260'] || f['264']).subfields || [];
+      const bPart = sub.find(s => s.b)?.b;
+      if (bPart) publisher = cleanPublisherName(bPart);
+    }
   }
   return {
     title: title || cleanBnTitleFallback(bib.title),
-    creator: authors.length ? authors.join('; ') : (bib.author || '')
+    creator: authors.length ? authors.join('; ') : (bib.author || ''),
+    publisher: publisher || cleanPublisherName(bib.publisher || '')
   };
 }
 
@@ -456,6 +467,7 @@ async function lookupBook(code){
         type: 'book',
         title: parsed.title,
         creator: parsed.creator,
+        publisher: parsed.publisher,
         format: 'papierowa miękka',
         year: b.publicationYear ? (String(b.publicationYear).match(/\d{4}/)||[])[0]||'' : '',
         cover_url: gbCover || `https://covers.openlibrary.org/b/isbn/${encodeURIComponent(code)}-M.jpg?default=false`
@@ -476,6 +488,7 @@ async function lookupBook(code){
         type: 'book',
         title: b.title || '',
         creator: (b.authors||[]).map(a=>a.name).join(', '),
+        publisher: (b.publishers||[]).map(p=>p.name).join(', '),
         format: 'papierowa miękka',
         year: b.publish_date ? (b.publish_date.match(/\d{4}/)||[])[0]||'' : '',
         cover_url: gbCover || `https://covers.openlibrary.org/b/isbn/${encodeURIComponent(code)}-M.jpg?default=false`
@@ -495,6 +508,7 @@ async function lookupBook(code){
         type: 'book',
         title: v.title || '',
         creator: (v.authors||[]).join(', '),
+        publisher: v.publisher || '',
         format: 'papierowa miękka',
         year: v.publishedDate ? (v.publishedDate.match(/\d{4}/)||[])[0]||'' : '',
         cover_url: v.imageLinks ? (v.imageLinks.thumbnail || v.imageLinks.smallThumbnail || '').replace(/^http:/, 'https:') : ''
@@ -744,6 +758,10 @@ function renderAddForm(main){
       <input id="f-title" value="${escapeHtml(l.title)}" placeholder="Tytuł">
       <label id="f-creator-label">${CREATOR_LABELS[l.type]}</label>
       <input id="f-creator" value="${escapeHtml(l.creator)}" placeholder="Kto stworzył">
+      ${l.type === 'book' ? `
+        <label>Wydawnictwo</label>
+        <input id="f-publisher" value="${escapeHtml(l.publisher||'')}" placeholder="np. Znak, W.A.B., PWN">
+      ` : ''}
       <label>Format</label>
       <select id="f-format">
         <option value="">— wybierz —</option>
@@ -979,9 +997,11 @@ async function saveItem(){
   if (!title){ toast('Podaj tytuł'); return; }
   const barcodeEl = document.getElementById('f-barcode');
   const indexEl = document.getElementById('f-index');
+  const publisherEl = document.getElementById('f-publisher');
   const payload = {
     barcode: (barcodeEl ? barcodeEl.value.trim() : l.barcode) || null,
     index_number: (indexEl ? indexEl.value.trim() : '') || null,
+    publisher: (publisherEl ? publisherEl.value.trim() : '') || null,
     type: document.getElementById('f-type').value,
     title,
     creator: document.getElementById('f-creator').value.trim() || null,
@@ -989,6 +1009,19 @@ async function saveItem(){
     year: parseInt(document.getElementById('f-year').value) || null,
     cover_url: l.cover_url || null
   };
+  if (!l.editingId){
+    const dup = state.items.find(i =>
+      (payload.barcode && i.barcode === payload.barcode) ||
+      (i.title.trim().toLowerCase() === title.toLowerCase() && (i.creator||'').trim().toLowerCase() === (payload.creator||'').trim().toLowerCase())
+    );
+    if (dup){
+      toast(`"${dup.title}" już masz w kolekcji 📚 — otwieram tę pozycję`);
+      state.lookup = null;
+      render();
+      openItem(dup.id);
+      return;
+    }
+  }
   const { error } = l.editingId
     ? await sb.from('items').update(payload).eq('id', l.editingId)
     : await sb.from('items').insert(payload);
@@ -1091,7 +1124,7 @@ function openItem(id){
       ` : ''}
       <div class="section-title">${TYPE_LABELS[item.type]}</div>
       <h2 style="margin:0 0 4px;">${escapeHtml(item.title)}</h2>
-      <div class="meta mono" style="color:var(--text-dim);margin-bottom:14px;">${escapeHtml(item.creator||'—')}${item.format?' · '+escapeHtml(item.format):''}${item.year?' · '+item.year:''}${item.barcode?' · '+escapeHtml(item.barcode):''}${item.index_number?' · Indeks: '+escapeHtml(item.index_number):''}</div>
+      <div class="meta mono" style="color:var(--text-dim);margin-bottom:14px;">${escapeHtml(item.creator||'—')}${item.format?' · '+escapeHtml(item.format):''}${item.year?' · '+item.year:''}${item.publisher?' · '+escapeHtml(item.publisher):''}${item.barcode?' · '+escapeHtml(item.barcode):''}${item.index_number?' · Indeks: '+escapeHtml(item.index_number):''}</div>
       ${loan ? `
         <div class="badge warn" style="margin-bottom:10px;">Wypożyczone: ${escapeHtml(loan.borrower_name)}</div>
         <div class="meta" style="margin-bottom:12px;">od ${new Date(loan.borrowed_at).toLocaleDateString('pl-PL')}</div>
@@ -1156,6 +1189,7 @@ function editItem(id){
     year: item.year || '',
     cover_url: item.cover_url || '',
     index_number: item.index_number || '',
+    publisher: item.publisher || '',
     checksumOk: item.barcode ? isValidBarcodeChecksum(item.barcode) : true,
     debugLog: []
   };
