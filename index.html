@@ -712,12 +712,16 @@ function renderAddForm(main){
         <input id="f-cover-url" value="${l.cover_url ? '' : ''}" placeholder="wklej link do zdjęcia okładki">
         <button class="btn small secondary" style="flex:0 0 auto;" onclick="setManualCoverUrl()">Ustaw</button>
       </div>
-      ${(l.barcode || l.editingId) ? `
-        <label>Kod kreskowy${l.checksumOk === false ? ' <span style="color:var(--danger);">(niepoprawna suma kontrolna — błąd odczytu?)</span>' : ''}</label>
+      ${(l.barcode || l.editingId || l.type === 'book') ? `
+        <label>Kod kreskowy / ISBN${l.checksumOk === false ? ' <span style="color:var(--danger);">(niepoprawna suma kontrolna — błąd odczytu?)</span>' : ''}</label>
         <div class="row">
-          <input id="f-barcode" value="${escapeHtml(l.barcode||'')}" class="mono" placeholder="opcjonalnie">
-          ${l.editingId ? '' : `<button class="btn small secondary" style="flex:0 0 auto;" onclick="recheckBarcode()">Szukaj ponownie</button>`}
+          <input id="f-barcode" value="${escapeHtml(l.barcode||'')}" class="mono" placeholder="opcjonalnie — wpisz i wyszukaj">
+          ${l.editingId ? '' : `<button class="btn small secondary" style="flex:0 0 auto;" onclick="recheckBarcode()">Szukaj</button>`}
         </div>
+      ` : ''}
+      ${l.type === 'book' ? `
+        <label>Indeks (numer katalogowy z okładki)</label>
+        <input id="f-index" value="${escapeHtml(l.index_number||'')}" placeholder="np. 12345 (opcjonalnie)">
       ` : ''}
       ${l.debugLog && l.debugLog.length ? `
         <details style="margin-bottom:12px;">
@@ -974,8 +978,10 @@ async function saveItem(){
   const title = document.getElementById('f-title').value.trim();
   if (!title){ toast('Podaj tytuł'); return; }
   const barcodeEl = document.getElementById('f-barcode');
+  const indexEl = document.getElementById('f-index');
   const payload = {
     barcode: (barcodeEl ? barcodeEl.value.trim() : l.barcode) || null,
+    index_number: (indexEl ? indexEl.value.trim() : '') || null,
     type: document.getElementById('f-type').value,
     title,
     creator: document.getElementById('f-creator').value.trim() || null,
@@ -1085,7 +1091,7 @@ function openItem(id){
       ` : ''}
       <div class="section-title">${TYPE_LABELS[item.type]}</div>
       <h2 style="margin:0 0 4px;">${escapeHtml(item.title)}</h2>
-      <div class="meta mono" style="color:var(--text-dim);margin-bottom:14px;">${escapeHtml(item.creator||'—')}${item.format?' · '+escapeHtml(item.format):''}${item.year?' · '+item.year:''}${item.barcode?' · '+escapeHtml(item.barcode):''}</div>
+      <div class="meta mono" style="color:var(--text-dim);margin-bottom:14px;">${escapeHtml(item.creator||'—')}${item.format?' · '+escapeHtml(item.format):''}${item.year?' · '+item.year:''}${item.barcode?' · '+escapeHtml(item.barcode):''}${item.index_number?' · Indeks: '+escapeHtml(item.index_number):''}</div>
       ${loan ? `
         <div class="badge warn" style="margin-bottom:10px;">Wypożyczone: ${escapeHtml(loan.borrower_name)}</div>
         <div class="meta" style="margin-bottom:12px;">od ${new Date(loan.borrowed_at).toLocaleDateString('pl-PL')}</div>
@@ -1149,6 +1155,7 @@ function editItem(id){
     format: item.format || '',
     year: item.year || '',
     cover_url: item.cover_url || '',
+    index_number: item.index_number || '',
     checksumOk: item.barcode ? isValidBarcodeChecksum(item.barcode) : true,
     debugLog: []
   };
