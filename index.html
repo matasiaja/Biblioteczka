@@ -707,6 +707,11 @@ function renderAddForm(main){
         </div>
         <div style="text-align:center;color:var(--text-dim);font-size:11px;margin-bottom:14px;">kliknij okładkę, żeby ją usunąć</div>
       ` : ''}
+      <label>Adres URL okładki${l.cover_url ? ' (zmień)' : ''}</label>
+      <div class="row">
+        <input id="f-cover-url" value="${l.cover_url ? '' : ''}" placeholder="wklej link do zdjęcia okładki">
+        <button class="btn small secondary" style="flex:0 0 auto;" onclick="setManualCoverUrl()">Ustaw</button>
+      </div>
       ${(l.barcode || l.editingId) ? `
         <label>Kod kreskowy${l.checksumOk === false ? ' <span style="color:var(--danger);">(niepoprawna suma kontrolna — błąd odczytu?)</span>' : ''}</label>
         <div class="row">
@@ -946,6 +951,14 @@ function cancelAdd(){
 function removeCoverPreview(){
   state.lookup.cover_url = '';
   toast('Usunięto okładkę');
+  render();
+}
+
+function setManualCoverUrl(){
+  const url = document.getElementById('f-cover-url').value.trim();
+  if (!url){ toast('Wklej najpierw adres URL'); return; }
+  state.lookup.cover_url = url;
+  toast('Ustawiono okładkę');
   render();
 }
 
