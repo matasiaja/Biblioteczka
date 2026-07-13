@@ -721,11 +721,16 @@ function renderAddForm(main){
         </div>
         <div style="text-align:center;color:var(--text-dim);font-size:11px;margin-bottom:14px;">kliknij okładkę, żeby ją usunąć</div>
       ` : ''}
-      <label>Adres URL okładki${l.cover_url ? ' (zmień)' : ''}</label>
-      <div class="row">
-        <input id="f-cover-url" value="${l.cover_url ? '' : ''}" placeholder="wklej link do zdjęcia okładki">
-        <button class="btn small secondary" style="flex:0 0 auto;" onclick="setManualCoverUrl()">Ustaw</button>
-      </div>
+      <label>Okładka${l.cover_url ? ' (zmień)' : ''}</label>
+      <input type="file" id="f-cover-file" accept="image/*" capture="environment" onchange="uploadCoverFile()">
+      <div id="cover-upload-status" class="meta" style="margin-top:-4px;margin-bottom:10px;"></div>
+      <details style="margin-bottom:14px;">
+        <summary style="cursor:pointer;color:var(--text-dim);font-size:12px;font-family:'IBM Plex Mono',monospace;">albo wklej link do zdjęcia</summary>
+        <div class="row" style="margin-top:8px;">
+          <input id="f-cover-url" placeholder="wklej link do zdjęcia okładki">
+          <button class="btn small secondary" style="flex:0 0 auto;" onclick="setManualCoverUrl()">Ustaw</button>
+        </div>
+      </details>
       ${(l.barcode || l.editingId || l.type === 'book') ? `
         <label>Kod kreskowy / ISBN${l.checksumOk === false ? ' <span style="color:var(--danger);">(niepoprawna suma kontrolna — błąd odczytu?)</span>' : ''}</label>
         <div class="row">
@@ -973,6 +978,26 @@ function cancelAdd(){
 function removeCoverPreview(){
   state.lookup.cover_url = '';
   toast('Usunięto okładkę');
+  render();
+}
+
+async function uploadCoverFile(){
+  const fileEl = document.getElementById('f-cover-file');
+  const file = fileEl.files && fileEl.files[0];
+  if (!file) return;
+  const statusEl = document.getElementById('cover-upload-status');
+  statusEl.textContent = 'Wgrywam…';
+  const ext = (file.name.split('.').pop() || 'jpg').toLowerCase().replace(/[^a-z0-9]/g, '') || 'jpg';
+  const path = `${session.user.id}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+  const { error: uploadError } = await sb.storage.from('covers').upload(path, file, { upsert: false });
+  if (uploadError){
+    statusEl.textContent = '';
+    toast('Błąd wgrywania: ' + uploadError.message);
+    return;
+  }
+  const { data } = sb.storage.from('covers').getPublicUrl(path);
+  state.lookup.cover_url = data.publicUrl;
+  toast('Wgrano okładkę');
   render();
 }
 

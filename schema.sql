@@ -8,9 +8,11 @@ create extension if not exists "pgcrypto";
 create table items (
   id uuid primary key default gen_random_uuid(),
   barcode text unique,
+  index_number text,          -- numer "Indeks" drukowany na polskich książkach obok kodu kreskowego
   type text not null check (type in ('book','movie','music')),
   title text not null,
   creator text,              -- autor / reżyser / artysta
+  publisher text,             -- wydawnictwo (tylko książki)
   format text,                -- np. papierowa/twarda, Blu-ray, DVD, CD, winyl
   year integer,
   cover_url text,
@@ -62,3 +64,13 @@ $$ language plpgsql;
 create trigger trg_items_updated_at
   before update on items
   for each row execute function set_updated_at();
+
+-- ============================================
+-- Storage — ręcznie wgrywane okładki (zdjęcia z telefonu)
+-- ============================================
+insert into storage.buckets (id, name, public) values ('covers', 'covers', true) on conflict (id) do nothing;
+
+create policy "Public read covers" on storage.objects for select using (bucket_id = 'covers');
+create policy "Authenticated upload covers" on storage.objects for insert to authenticated with check (bucket_id = 'covers');
+create policy "Authenticated update covers" on storage.objects for update to authenticated using (bucket_id = 'covers');
+create policy "Authenticated delete covers" on storage.objects for delete to authenticated using (bucket_id = 'covers');
