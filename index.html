@@ -111,7 +111,9 @@ let state = {
   scannedBarcode: null,
   scannedItem: null,
   lookup: null,
-  loanScanning: false
+  loanScanning: false,
+  selectMode: false,
+  selectedIds: []
 };
 
 const app = document.getElementById('app');
@@ -218,6 +220,8 @@ async function setTab(tab){
   state.scannedItem = null;
   state.lookup = null;
   state.loanScanning = false;
+  state.selectMode = false;
+  state.selectedIds = [];
   localStorage.setItem('bib_tab', tab);
   if (tab === 'list' || tab === 'loans'){
     await loadAll(); // odśwież — inne urządzenie (np. telefon) mogło coś dodać/zmienić
@@ -227,6 +231,7 @@ async function setTab(tab){
 
 function renderTab(){
   const main = document.getElementById('main');
+  if (state.lookup && state.lookup.editingId){ renderAddForm(main); return; }
   if (state.tab==='scan') renderScan(main);
   else if (state.tab==='list') renderList(main);
   else if (state.tab==='loans') renderLoans(main);
@@ -676,7 +681,7 @@ async function lookupMovieDetails(title){
 function renderAddForm(main){
   const l = state.lookup;
   main.innerHTML = `
-    <div class="section-title">Nowa pozycja</div>
+    <div class="section-title">${l.editingId ? 'Edytuj pozycję' : 'Nowa pozycja'}</div>
     <div class="card">
       ${l.cover_url ? `
         <div style="text-align:center;margin-bottom:4px;">
@@ -684,11 +689,11 @@ function renderAddForm(main){
         </div>
         <div style="text-align:center;color:var(--text-dim);font-size:11px;margin-bottom:14px;">kliknij okładkę, żeby ją usunąć</div>
       ` : ''}
-      ${l.barcode ? `
+      ${(l.barcode || l.editingId) ? `
         <label>Kod kreskowy${l.checksumOk === false ? ' <span style="color:var(--danger);">(niepoprawna suma kontrolna — błąd odczytu?)</span>' : ''}</label>
         <div class="row">
-          <input id="f-barcode" value="${escapeHtml(l.barcode)}" class="mono">
-          <button class="btn small secondary" style="flex:0 0 auto;" onclick="recheckBarcode()">Szukaj ponownie</button>
+          <input id="f-barcode" value="${escapeHtml(l.barcode||'')}" class="mono" placeholder="opcjonalnie">
+          ${l.editingId ? '' : `<button class="btn small secondary" style="flex:0 0 auto;" onclick="recheckBarcode()">Szukaj ponownie</button>`}
         </div>
       ` : ''}
       ${l.debugLog && l.debugLog.length ? `
@@ -718,7 +723,7 @@ function renderAddForm(main){
       </select>
       <label id="f-year-label">${YEAR_LABELS[l.type]}</label>
       <input id="f-year" value="${escapeHtml(l.year)}" placeholder="np. 2020" inputmode="numeric">
-      <button class="btn" onclick="saveItem()">Zapisz do kolekcji</button>
+      <button class="btn" onclick="saveItem()">${l.editingId ? 'Zapisz zmiany' : 'Zapisz do kolekcji'}</button>
       <button class="btn secondary" style="margin-top:8px;" onclick="cancelAdd()">Anuluj</button>
     </div>
   `;
@@ -894,11 +899,14 @@ async function saveItem(){
     year: parseInt(document.getElementById('f-year').value) || null,
     cover_url: l.cover_url || null
   };
-  const { error } = await sb.from('items').insert(payload);
+  const { error } = l.editingId
+    ? await sb.from('items').update(payload).eq('id', l.editingId)
+    : await sb.from('items').insert(payload);
   if (error){ toast('Błąd zapisu: ' + error.message); return; }
   await loadAll();
+  const wasEditing = l.editingId;
   state.lookup = null;
-  toast('Dodano do kolekcji');
+  toast(wasEditing ? 'Zapisano zmiany' : 'Dodano do kolekcji');
   render();
 }
 
@@ -906,6 +914,19 @@ async function saveItem(){
 function renderList(main){
   const filtered = state.typeFilter==='all' ? state.items : state.items.filter(i=>i.type===state.typeFilter);
   main.innerHTML = `
+    <div class="row" style="margin-bottom:12px;">
+      <button class="btn secondary" onclick="setTab('scan')">+ Dodaj pozycję</button>
+      <button class="btn small secondary" style="flex:0 0 auto;" onclick="toggleSelectMode()">${state.selectMode ? 'Gotowe' : 'Zaznacz'}</button>
+    </div>
+    ${state.selectMode ? `
+      <div class="card" style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px;padding:12px;">
+        <span class="meta">Zaznaczono: ${state.selectedIds.length}</span>
+        <div style="display:flex;gap:8px;">
+          <button class="btn small secondary" onclick="cancelSelectMode()">Anuluj</button>
+          <button class="btn small danger" onclick="bulkDeleteItems()" ${state.selectedIds.length===0?'disabled':''}>Usuń zaznaczone</button>
+        </div>
+      </div>
+    ` : ''}
     <div class="tabs">
       ${['all','book','movie','music'].map(t=>`<button class="${state.typeFilter===t?'active':''}" onclick="setTypeFilter('${t}')">${t==='all'?'Wszystko':TYPE_LABELS[t]}</button>`).join('')}
     </div>
@@ -913,7 +934,9 @@ function renderList(main){
       ${filtered.length===0 ? `<div class="empty">Brak pozycji w tej kategorii.</div>` :
         filtered.map(i=>{
           const loan = activeLoanFor(i.id);
-          return `<div class="item-row" onclick="openItem('${i.id}')">
+          const checked = state.selectedIds.includes(i.id);
+          return `<div class="item-row" onclick="${state.selectMode ? `toggleSelect('${i.id}')` : `openItem('${i.id}')`}">
+            ${state.selectMode ? `<input type="checkbox" ${checked?'checked':''} onclick="event.stopPropagation();toggleSelect('${i.id}')" style="width:18px;height:18px;flex-shrink:0;margin:0;">` : ''}
             ${i.cover_url ? coverImg(i.cover_url) : `<div class="cover" style="display:flex;align-items:center;justify-content:center;color:var(--text-dim);">${icon(i.type)}</div>`}
             <div style="flex:1;">
               <div class="name">${escapeHtml(i.title)}</div>
@@ -929,6 +952,36 @@ function renderList(main){
 function setTypeFilter(t){
   state.typeFilter = t;
   localStorage.setItem('bib_type_filter', t);
+  renderTab();
+}
+
+function toggleSelectMode(){
+  state.selectMode = !state.selectMode;
+  if (!state.selectMode) state.selectedIds = [];
+  renderTab();
+}
+
+function cancelSelectMode(){
+  state.selectMode = false;
+  state.selectedIds = [];
+  renderTab();
+}
+
+function toggleSelect(id){
+  const idx = state.selectedIds.indexOf(id);
+  if (idx === -1) state.selectedIds.push(id); else state.selectedIds.splice(idx, 1);
+  renderTab();
+}
+
+async function bulkDeleteItems(){
+  if (state.selectedIds.length === 0) return;
+  if (!confirm(`Na pewno usunąć ${state.selectedIds.length} pozycji z kolekcji?`)) return;
+  const { error } = await sb.from('items').delete().in('id', state.selectedIds);
+  if (error){ toast('Błąd: ' + error.message); return; }
+  await loadAll();
+  toast(`Usunięto ${state.selectedIds.length} pozycji`);
+  state.selectMode = false;
+  state.selectedIds = [];
   renderTab();
 }
 
@@ -958,6 +1011,7 @@ function openItem(id){
         <input id="borrower-name" placeholder="Komu pożyczasz?">
         <button class="btn" onclick="lendItem('${item.id}')">Pożycz</button>
       `}
+      <button class="btn secondary" style="margin-top:8px;" onclick="editItem('${item.id}')">Edytuj</button>
       <button class="btn secondary" style="margin-top:8px;" onclick="deleteItem('${item.id}')">Usuń z kolekcji</button>
     </div>
   `;
@@ -994,8 +1048,27 @@ async function deleteItem(itemId){
   const { error } = await sb.from('items').delete().eq('id', itemId);
   if (error){ toast('Błąd: ' + error.message); return; }
   await loadAll();
+  state.lookup = null;
   toast('Usunięto');
   renderTab();
+}
+
+function editItem(id){
+  const item = state.items.find(i => i.id === id);
+  if (!item) return;
+  state.lookup = {
+    editingId: item.id,
+    barcode: item.barcode || null,
+    type: item.type,
+    title: item.title || '',
+    creator: item.creator || '',
+    format: item.format || '',
+    year: item.year || '',
+    cover_url: item.cover_url || '',
+    checksumOk: item.barcode ? isValidBarcodeChecksum(item.barcode) : true,
+    debugLog: []
+  };
+  render();
 }
 
 // ---------------- WYPOŻYCZENIA TAB ----------------
