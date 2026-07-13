@@ -722,14 +722,21 @@ function renderAddForm(main){
 function renderOmdbSearchBox(l){
   return `
     <div class="card" style="background:var(--surface-2);margin:0 0 14px;padding:12px;">
-      <label>Znajdź dokładne dane filmu (OMDb)</label>
+      <label>Znajdź dokładne dane filmu (OMDb / IMDb)</label>
       <div class="row">
         <input id="omdb-search-q" value="${escapeHtml(l.title||'')}" placeholder="Wpisz tytuł filmu">
         <button class="btn small secondary" style="flex:0 0 auto;" onclick="doOmdbSearch()">Szukaj</button>
       </div>
       <div id="omdb-results"></div>
+      <button class="link" style="margin-top:10px;" onclick="openFilmwebSearch()">Nie znalazłeś? Szukaj na Filmweb ↗</button>
     </div>
   `;
+}
+
+function openFilmwebSearch(){
+  const q = (document.getElementById('omdb-search-q')?.value || document.getElementById('f-title')?.value || '').trim();
+  if (!q){ toast('Wpisz najpierw tytuł'); return; }
+  window.open(`https://www.filmweb.pl/search#/all?q=${encodeURIComponent(q)}`, '_blank', 'noopener');
 }
 
 async function searchOmdbTitles(query){
