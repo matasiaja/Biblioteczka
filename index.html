@@ -678,7 +678,12 @@ function renderAddForm(main){
   main.innerHTML = `
     <div class="section-title">Nowa pozycja</div>
     <div class="card">
-      ${l.cover_url ? `<img src="${escapeHtml(l.cover_url)}" alt="" style="width:80px;height:110px;object-fit:cover;border-radius:8px;display:block;margin:0 auto 14px;" onerror="this.style.display='none'">` : ''}
+      ${l.cover_url ? `
+        <div style="text-align:center;margin-bottom:4px;">
+          <img src="${escapeHtml(l.cover_url)}" alt="" style="width:80px;height:110px;object-fit:cover;border-radius:8px;cursor:pointer;" onerror="this.style.display='none'" onclick="removeCoverPreview()" title="Kliknij, żeby usunąć złą okładkę">
+        </div>
+        <div style="text-align:center;color:var(--text-dim);font-size:11px;margin-bottom:14px;">kliknij okładkę, żeby ją usunąć</div>
+      ` : ''}
       ${l.barcode ? `
         <label>Kod kreskowy${l.checksumOk === false ? ' <span style="color:var(--danger);">(niepoprawna suma kontrolna — błąd odczytu?)</span>' : ''}</label>
         <div class="row">
@@ -862,6 +867,12 @@ function cancelAdd(){
   render();
 }
 
+function removeCoverPreview(){
+  state.lookup.cover_url = '';
+  toast('Usunięto okładkę');
+  render();
+}
+
 async function recheckBarcode(){
   const code = document.getElementById('f-barcode').value.trim();
   if (!code) return;
@@ -929,7 +940,12 @@ function openItem(id){
   main.innerHTML = `
     <button class="link" onclick="renderTab()">&larr; Wróć do listy</button>
     <div class="card" style="margin-top:12px;">
-      ${item.cover_url ? `<div style="margin-bottom:14px;">${coverImg(item.cover_url, 100)}</div>` : ''}
+      ${item.cover_url ? `
+        <div style="text-align:center;margin-bottom:2px;cursor:pointer;" onclick="removeSavedCover('${item.id}')" title="Kliknij, żeby usunąć złą okładkę">
+          ${coverImg(item.cover_url, 100)}
+        </div>
+        <div style="text-align:center;color:var(--text-dim);font-size:11px;margin-bottom:14px;">kliknij okładkę, żeby ją usunąć</div>
+      ` : ''}
       <div class="section-title">${TYPE_LABELS[item.type]}</div>
       <h2 style="margin:0 0 4px;">${escapeHtml(item.title)}</h2>
       <div class="meta mono" style="color:var(--text-dim);margin-bottom:14px;">${escapeHtml(item.creator||'—')}${item.format?' · '+escapeHtml(item.format):''}${item.year?' · '+item.year:''}${item.barcode?' · '+escapeHtml(item.barcode):''}</div>
@@ -945,6 +961,14 @@ function openItem(id){
       <button class="btn secondary" style="margin-top:8px;" onclick="deleteItem('${item.id}')">Usuń z kolekcji</button>
     </div>
   `;
+}
+
+async function removeSavedCover(itemId){
+  const { error } = await sb.from('items').update({ cover_url: null }).eq('id', itemId);
+  if (error){ toast('Błąd: ' + error.message); return; }
+  await loadAll();
+  toast('Usunięto okładkę');
+  openItem(itemId);
 }
 
 async function lendItem(itemId){
