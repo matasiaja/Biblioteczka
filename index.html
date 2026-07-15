@@ -79,6 +79,7 @@
   .section-title{font-size:12px;color:var(--text-dim);text-transform:uppercase;letter-spacing:.6px;font-family:'IBM Plex Mono',monospace;margin:4px 0 10px;}
   .config-warn{background:rgba(255,176,32,.1);border:1px solid var(--warn);color:var(--warn);border-radius:10px;padding:14px;font-size:13px;line-height:1.5;margin:16px;}
   .cover{width:44px;height:60px;border-radius:5px;object-fit:cover;background:var(--surface-2);flex-shrink:0;}
+  .cover.square{width:60px;height:60px;}
 </style>
 </head>
 <body>
@@ -734,7 +735,7 @@ function renderAddForm(main){
     <div class="card">
       ${l.cover_url ? `
         <div style="text-align:center;margin-bottom:4px;">
-          <img src="${escapeHtml(l.cover_url)}" alt="" style="width:80px;height:110px;object-fit:cover;border-radius:8px;cursor:pointer;" onerror="this.style.display='none'" onclick="removeCoverPreview()" title="Kliknij, żeby usunąć złą okładkę">
+          <img src="${escapeHtml(l.cover_url)}" alt="" style="width:80px;height:${l.type==='music'?80:110}px;object-fit:cover;border-radius:8px;cursor:pointer;" onerror="this.style.display='none'" onclick="removeCoverPreview()" title="Kliknij, żeby usunąć złą okładkę">
         </div>
         <div style="text-align:center;color:var(--text-dim);font-size:11px;margin-bottom:14px;">kliknij okładkę, żeby ją usunąć</div>
       ` : ''}
@@ -982,9 +983,12 @@ function onTypeChange(){
   render();
 }
 
-function coverImg(url, size){
+function coverImg(url, size, type){
   if (!url) return '';
-  return `<img src="${escapeHtml(url)}" alt="" class="cover" style="${size?`width:${size}px;height:${Math.round(size*1.36)}px;`:''}" onerror="this.style.display='none'">`;
+  const square = type === 'music';
+  const cls = square ? 'cover square' : 'cover';
+  const style = size ? `width:${size}px;height:${square ? size : Math.round(size*1.36)}px;` : '';
+  return `<img src="${escapeHtml(url)}" alt="" class="${cls}" style="${style}" onerror="this.style.display='none'">`;
 }
 
 function cancelAdd(){
@@ -1110,7 +1114,7 @@ function renderList(main){
           const checked = state.selectedIds.includes(i.id);
           return `<div class="item-row" onclick="${state.selectMode ? `toggleSelect('${i.id}')` : `openItem('${i.id}')`}">
             ${state.selectMode ? `<input type="checkbox" ${checked?'checked':''} onclick="event.stopPropagation();toggleSelect('${i.id}')" style="width:18px;height:18px;flex-shrink:0;margin:0;">` : ''}
-            ${i.cover_url ? coverImg(i.cover_url) : `<div class="cover" style="display:flex;align-items:center;justify-content:center;color:var(--text-dim);">${icon(i.type)}</div>`}
+            ${i.cover_url ? coverImg(i.cover_url, null, i.type) : `<div class="cover${i.type==='music'?' square':''}" style="display:flex;align-items:center;justify-content:center;color:var(--text-dim);">${icon(i.type)}</div>`}
             <div style="flex:1;">
               <div class="name">${escapeHtml(i.title)}</div>
               <div class="meta">${escapeHtml(i.creator||'—')}${i.format?' · '+escapeHtml(i.format):''}${i.year?' · '+i.year:''}</div>
@@ -1160,7 +1164,7 @@ function renderSearch(main){
         results.map(i=>{
           const loan = activeLoanFor(i.id);
           return `<div class="item-row" onclick="openItem('${i.id}')">
-            ${i.cover_url ? coverImg(i.cover_url) : `<div class="cover" style="display:flex;align-items:center;justify-content:center;color:var(--text-dim);">${icon(i.type)}</div>`}
+            ${i.cover_url ? coverImg(i.cover_url, null, i.type) : `<div class="cover${i.type==='music'?' square':''}" style="display:flex;align-items:center;justify-content:center;color:var(--text-dim);">${icon(i.type)}</div>`}
             <div style="flex:1;">
               <div class="name">${escapeHtml(i.title)}</div>
               <div class="meta">${escapeHtml(i.creator||'—')}${i.format?' · '+escapeHtml(i.format):''}${i.year?' · '+i.year:''}</div>
@@ -1214,7 +1218,7 @@ function openItem(id){
     <div class="card" style="margin-top:12px;">
       ${item.cover_url ? `
         <div style="text-align:center;margin-bottom:2px;cursor:pointer;" onclick="removeSavedCover('${item.id}')" title="Kliknij, żeby usunąć złą okładkę">
-          ${coverImg(item.cover_url, 100)}
+          ${coverImg(item.cover_url, 100, item.type)}
         </div>
         <div style="text-align:center;color:var(--text-dim);font-size:11px;margin-bottom:14px;">kliknij okładkę, żeby ją usunąć</div>
       ` : ''}
