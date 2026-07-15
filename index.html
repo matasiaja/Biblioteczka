@@ -300,9 +300,9 @@ function renderScan(main){
   // Kamera na telefonie (zwłaszcza iOS) wymaga, żeby jej uruchomienie było bezpośrednią
   // reakcją na dotknięcie ekranu — nie da się jej auto-odpalić zaraz po wejściu na zakładkę.
   main.innerHTML = `
-    <div class="card" style="text-align:center;padding:36px 20px;">
-      <div class="scan-hint" style="margin-bottom:16px;">Dotknij, żeby uruchomić kamerę</div>
-      <button class="btn" onclick="beginScan()">Rozpocznij skanowanie</button>
+    <div class="card" style="text-align:center;display:flex;flex-direction:column;justify-content:center;align-items:center;min-height:60vh;">
+      <div class="scan-hint" style="margin-bottom:20px;">Dotknij, żeby uruchomić kamerę</div>
+      <button class="btn" style="max-width:280px;padding:32px;font-size:24px;letter-spacing:1px;" onclick="beginScan()">SKANUJ</button>
     </div>
     <div style="margin-top:14px;">
       <button class="btn secondary" onclick="manualBarcode()">Wpisz kod ręcznie</button>
