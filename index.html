@@ -1227,11 +1227,14 @@ function openItem(id){
       <div class="meta mono" style="color:var(--text-dim);margin-bottom:14px;">${escapeHtml(item.creator||'—')}${item.format?' · '+escapeHtml(item.format):''}${item.year?' · '+item.year:''}${item.publisher?' · '+escapeHtml(item.publisher):''}${item.barcode?' · '+escapeHtml(item.barcode):''}${item.index_number?' · Indeks: '+escapeHtml(item.index_number):''}</div>
       ${loan ? `
         <div class="badge warn" style="margin-bottom:10px;">Wypożyczone: ${escapeHtml(loan.borrower_name)}</div>
-        <div class="meta" style="margin-bottom:12px;">od ${new Date(loan.borrowed_at).toLocaleDateString('pl-PL')}</div>
+        <label>Data pożyczenia</label>
+        <input type="date" id="loan-date-input" value="${toLocalDateInput(loan.borrowed_at)}" onchange="updateLoanDate('${loan.id}','${item.id}')" style="margin-bottom:12px;">
         <button class="btn" onclick="returnLoan('${loan.id}')">Oznacz jako zwrócone</button>
       ` : `
         <div class="badge ok" style="margin-bottom:12px;">Dostępne</div>
         <input id="borrower-name" placeholder="Komu pożyczasz?">
+        <label>Data pożyczenia</label>
+        <input type="date" id="borrow-date" value="${todayIso()}">
         <button class="btn" onclick="lendItem('${item.id}')">Pożycz</button>
       `}
       <button class="btn secondary" style="margin-top:8px;" onclick="editItem('${item.id}')">Edytuj</button>
@@ -1248,13 +1251,36 @@ async function removeSavedCover(itemId){
   openItem(itemId);
 }
 
+function toLocalDateInput(d){
+  const dt = new Date(d);
+  const tzOffsetMs = dt.getTimezoneOffset() * 60000;
+  return new Date(dt.getTime() - tzOffsetMs).toISOString().slice(0,10);
+}
+
+function todayIso(){
+  return toLocalDateInput(new Date());
+}
+
 async function lendItem(itemId){
   const name = document.getElementById('borrower-name').value.trim();
   if (!name){ toast('Podaj komu pożyczasz'); return; }
-  const { error } = await sb.from('loans').insert({ item_id: itemId, borrower_name: name });
+  const dateVal = document.getElementById('borrow-date').value || todayIso();
+  const borrowed_at = new Date(dateVal + 'T12:00:00').toISOString();
+  const { error } = await sb.from('loans').insert({ item_id: itemId, borrower_name: name, borrowed_at });
   if (error){ toast('Błąd: ' + error.message); return; }
   await loadAll();
   toast('Zapisano wypożyczenie');
+  openItem(itemId);
+}
+
+async function updateLoanDate(loanId, itemId){
+  const dateVal = document.getElementById('loan-date-input').value;
+  if (!dateVal) return;
+  const borrowed_at = new Date(dateVal + 'T12:00:00').toISOString();
+  const { error } = await sb.from('loans').update({ borrowed_at }).eq('id', loanId);
+  if (error){ toast('Błąd: ' + error.message); return; }
+  await loadAll();
+  toast('Zaktualizowano datę pożyczenia');
   openItem(itemId);
 }
 
