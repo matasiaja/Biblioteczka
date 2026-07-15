@@ -162,7 +162,9 @@ async function boot(){
     renderNotConfigured();
     return;
   }
-  sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+    global: { fetch: (url, options) => fetch(url, { ...options, cache: 'no-store' }) }
+  });
   const { data } = await sb.auth.getSession();
   session = data.session;
   sb.auth.onAuthStateChange((_e, s)=>{ session = s; render(); });
@@ -181,10 +183,11 @@ function renderNotConfigured(){
 }
 
 async function loadAll(){
-  const [{data:items}, {data:loans}] = await Promise.all([
+  const [{data:items, error:itemsError}, {data:loans, error:loansError}] = await Promise.all([
     sb.from('items').select('*').order('title'),
     sb.from('loans').select('*').is('returned_at', null)
   ]);
+  if (itemsError || loansError) toast('Błąd wczytywania danych: ' + (itemsError?.message || loansError?.message));
   state.items = items || [];
   state.loans = loans || [];
 }
