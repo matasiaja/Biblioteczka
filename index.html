@@ -1378,11 +1378,12 @@ function renderLoans(main){
   const loanRow = (l, returnLabel) => {
     const item = state.items.find(i=>i.id===l.item_id);
     return `<div class="item-row" onclick="openItem('${l.item_id}')">
-      <div>
+      ${item && item.cover_url ? coverImg(item.cover_url, null, item.type) : `<div class="cover${item && item.type==='music'?' square':''}" style="display:flex;align-items:center;justify-content:center;color:var(--text-dim);">${icon(item ? item.type : 'book')}</div>`}
+      <div style="flex:1;">
         <div class="name">${escapeHtml(item ? item.title : '—')}</div>
         <div class="meta">${l.direction==='in'?'od':'u'}: ${escapeHtml(l.borrower_name)} · od ${new Date(l.borrowed_at).toLocaleDateString('pl-PL')}</div>
       </div>
-      <button class="btn small secondary" onclick="event.stopPropagation();returnLoan('${l.id}')">${returnLabel}</button>
+      <button class="btn small secondary" style="flex:0 0 auto;" onclick="event.stopPropagation();returnLoan('${l.id}')">${returnLabel}</button>
     </div>`;
   };
   main.innerHTML = `
