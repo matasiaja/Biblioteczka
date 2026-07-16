@@ -1119,7 +1119,7 @@ function renderList(main){
               <div class="name">${escapeHtml(i.title)}</div>
               <div class="meta">${escapeHtml(i.creator||'—')}${i.format?' · '+escapeHtml(i.format):''}${i.year?' · '+i.year:''}</div>
             </div>
-            ${loan ? `<span class="badge warn">u: ${escapeHtml(loan.borrower_name)}</span>` : ''}
+            ${loan ? `<span class="badge warn">${loan.direction==='in'?'od':'u'}: ${escapeHtml(loan.borrower_name)}</span>` : ''}
           </div>`;
         }).join('')}
     </div>
@@ -1169,7 +1169,7 @@ function renderSearch(main){
               <div class="name">${escapeHtml(i.title)}</div>
               <div class="meta">${escapeHtml(i.creator||'—')}${i.format?' · '+escapeHtml(i.format):''}${i.year?' · '+i.year:''}</div>
             </div>
-            ${loan ? `<span class="badge warn">u: ${escapeHtml(loan.borrower_name)}</span>` : ''}
+            ${loan ? `<span class="badge warn">${loan.direction==='in'?'od':'u'}: ${escapeHtml(loan.borrower_name)}</span>` : ''}
           </div>`;
         }).join('')}
     </div>
@@ -1211,6 +1211,8 @@ async function bulkDeleteItems(){
 function openItem(id){
   const item = state.items.find(i=>i.id===id);
   if (!item) return;
+  if (state.openItemId !== id) state.lendMode = null;
+  state.openItemId = id;
   const loan = activeLoanFor(id);
   const main = document.getElementById('main');
   main.innerHTML = `
@@ -1226,17 +1228,11 @@ function openItem(id){
       <h2 style="margin:0 0 4px;">${escapeHtml(item.title)}</h2>
       <div class="meta mono" style="color:var(--text-dim);margin-bottom:14px;">${escapeHtml(item.creator||'—')}${item.format?' · '+escapeHtml(item.format):''}${item.year?' · '+item.year:''}${item.publisher?' · '+escapeHtml(item.publisher):''}${item.barcode?' · '+escapeHtml(item.barcode):''}${item.index_number?' · Indeks: '+escapeHtml(item.index_number):''}</div>
       ${loan ? `
-        <div class="badge warn" style="margin-bottom:10px;">Wypożyczone: ${escapeHtml(loan.borrower_name)}</div>
+        <div class="badge warn" style="margin-bottom:10px;">${loan.direction==='in' ? 'Pożyczone od: '+escapeHtml(loan.borrower_name) : 'Wypożyczone: '+escapeHtml(loan.borrower_name)}</div>
         <label>Data pożyczenia</label>
         <input type="date" id="loan-date-input" value="${toLocalDateInput(loan.borrowed_at)}" onchange="updateLoanDate('${loan.id}','${item.id}')" style="margin-bottom:12px;">
-        <button class="btn" onclick="returnLoan('${loan.id}')">Oznacz jako zwrócone</button>
-      ` : `
-        <div class="badge ok" style="margin-bottom:12px;">Dostępne</div>
-        <input id="borrower-name" placeholder="Komu pożyczasz?">
-        <label>Data pożyczenia</label>
-        <input type="date" id="borrow-date" value="${todayIso()}">
-        <button class="btn" onclick="lendItem('${item.id}')">Pożycz</button>
-      `}
+        <button class="btn" onclick="returnLoan('${loan.id}')">${loan.direction==='in' ? 'Oznacz jako oddane właścicielowi' : 'Oznacz jako zwrócone'}</button>
+      ` : renderLendBox(item)}
       <button class="btn secondary" style="margin-top:8px;" onclick="editItem('${item.id}')">Edytuj</button>
       <button class="btn secondary" style="margin-top:8px;" onclick="deleteItem('${item.id}')">Usuń z kolekcji</button>
     </div>
@@ -1261,15 +1257,46 @@ function todayIso(){
   return toLocalDateInput(new Date());
 }
 
-async function lendItem(itemId){
+function renderLendBox(item){
+  const mode = state.lendMode;
+  if (mode === 'out' || mode === 'in'){
+    const isIn = mode === 'in';
+    return `
+      <div class="badge ok" style="margin-bottom:12px;">Dostępne</div>
+      <input id="borrower-name" placeholder="${isIn ? 'Od kogo pożyczyłeś?' : 'Komu pożyczasz?'}">
+      <label>Data pożyczenia</label>
+      <input type="date" id="borrow-date" value="${todayIso()}">
+      <button class="btn" onclick="lendItem('${item.id}','${mode}')">${isIn ? 'Zapisz' : 'Pożycz'}</button>
+      <button class="btn secondary" style="margin-top:8px;" onclick="cancelLendMode('${item.id}')">Anuluj</button>
+    `;
+  }
+  return `
+    <div class="badge ok" style="margin-bottom:12px;">Dostępne</div>
+    <button class="btn" onclick="setLendMode('${item.id}','out')">Pożycz komuś</button>
+    <button class="btn secondary" style="margin-top:8px;" onclick="setLendMode('${item.id}','in')">Zarejestruj jako pożyczone od kogoś</button>
+  `;
+}
+
+function setLendMode(itemId, mode){
+  state.lendMode = mode;
+  openItem(itemId);
+}
+
+function cancelLendMode(itemId){
+  state.lendMode = null;
+  openItem(itemId);
+}
+
+async function lendItem(itemId, direction){
   const name = document.getElementById('borrower-name').value.trim();
-  if (!name){ toast('Podaj komu pożyczasz'); return; }
+  if (!name){ toast(direction === 'in' ? 'Podaj od kogo pożyczyłeś' : 'Podaj komu pożyczasz'); return; }
   const dateVal = document.getElementById('borrow-date').value || todayIso();
   const borrowed_at = new Date(dateVal + 'T12:00:00').toISOString();
-  const { error } = await sb.from('loans').insert({ item_id: itemId, borrower_name: name, borrowed_at });
+  const { error } = await sb.from('loans').insert({ item_id: itemId, borrower_name: name, borrowed_at, direction });
   if (error){ toast('Błąd: ' + error.message); return; }
   await loadAll();
-  toast('Zapisano wypożyczenie');
+  state.lendMode = null;
+  toast(direction === 'in' ? 'Zarejestrowano jako pożyczone' : 'Zapisano wypożyczenie');
   openItem(itemId);
 }
 
@@ -1285,10 +1312,11 @@ async function updateLoanDate(loanId, itemId){
 }
 
 async function returnLoan(loanId){
+  const loan = state.loans.find(l => l.id === loanId);
   const { error } = await sb.from('loans').update({ returned_at: new Date().toISOString() }).eq('id', loanId);
   if (error){ toast('Błąd: ' + error.message); return; }
   await loadAll();
-  toast('Oznaczono zwrot');
+  toast(loan && loan.direction === 'in' ? 'Oznaczono jako oddane właścicielowi' : 'Oznaczono zwrot');
   renderTab();
 }
 
@@ -1345,20 +1373,28 @@ function renderLoans(main){
     main.innerHTML = `${scanBtn}<div class="card"><div class="empty">Nic obecnie nie jest pożyczone.</div></div>`;
     return;
   }
+  const lentOut = state.loans.filter(l => l.direction !== 'in');
+  const borrowedIn = state.loans.filter(l => l.direction === 'in');
+  const loanRow = (l, returnLabel) => {
+    const item = state.items.find(i=>i.id===l.item_id);
+    return `<div class="item-row" onclick="openItem('${l.item_id}')">
+      <div>
+        <div class="name">${escapeHtml(item ? item.title : '—')}</div>
+        <div class="meta">${l.direction==='in'?'od':'u'}: ${escapeHtml(l.borrower_name)} · od ${new Date(l.borrowed_at).toLocaleDateString('pl-PL')}</div>
+      </div>
+      <button class="btn small secondary" onclick="event.stopPropagation();returnLoan('${l.id}')">${returnLabel}</button>
+    </div>`;
+  };
   main.innerHTML = `
     ${scanBtn}
-    <div class="card">
-      ${state.loans.map(l=>{
-        const item = state.items.find(i=>i.id===l.item_id);
-        return `<div class="item-row" onclick="openItem('${l.item_id}')">
-          <div>
-            <div class="name">${escapeHtml(item ? item.title : '—')}</div>
-            <div class="meta">u: ${escapeHtml(l.borrower_name)} · od ${new Date(l.borrowed_at).toLocaleDateString('pl-PL')}</div>
-          </div>
-          <button class="btn small secondary" onclick="event.stopPropagation();returnLoan('${l.id}')">Zwrot</button>
-        </div>`;
-      }).join('')}
-    </div>
+    ${lentOut.length ? `
+      <div class="section-title">Wypożyczone innym</div>
+      <div class="card">${lentOut.map(l => loanRow(l, 'Zwrot')).join('')}</div>
+    ` : ''}
+    ${borrowedIn.length ? `
+      <div class="section-title">Pożyczone od kogoś</div>
+      <div class="card">${borrowedIn.map(l => loanRow(l, 'Oddane')).join('')}</div>
+    ` : ''}
   `;
 }
 

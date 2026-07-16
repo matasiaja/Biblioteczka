@@ -25,10 +25,13 @@ create index items_barcode_idx on items(barcode);
 create index items_type_idx on items(type);
 
 -- Historia i aktualny stan wypożyczeń
+-- direction 'out' = ja pożyczam ten przedmiot komuś (mój, ktoś go ma)
+-- direction 'in'  = ktoś pożyczył mi ten przedmiot (nie mój, ja go mam)
 create table loans (
   id uuid primary key default gen_random_uuid(),
   item_id uuid not null references items(id) on delete cascade,
   borrower_name text not null,
+  direction text not null default 'out' check (direction in ('out','in')),
   borrowed_at timestamptz not null default now(),
   returned_at timestamptz
 );
