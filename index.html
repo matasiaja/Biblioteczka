@@ -667,7 +667,7 @@ async function lookupBarcodeGeneral(code){
     if (item){
       const cat = (item.category || '').toLowerCase();
       const title = (item.title || '').toLowerCase();
-      const isMusic = /music|vinyl|audio cd|album/.test(cat) || /vinyl|soundtrack/.test(title);
+      const isMusic = /music|vinyl|album|compact disc|soundtrack|\bcds?\b/.test(cat) || /vinyl|soundtrack|\balbum\b|\blp\b|\bcd\b/.test(title);
       const type = isMusic ? 'music' : 'movie';
       const format = type === 'movie' ? detectMovieFormat(item.title||'') : detectMusicFormat(item.title||'');
       const cleanTitle = cleanListingTitle(item.title||'');
