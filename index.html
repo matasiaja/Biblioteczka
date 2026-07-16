@@ -1472,11 +1472,11 @@ function renderLoans(main){
     ${toolbar}
     ${lentOut.length===0 && borrowedIn.length===0 ? `<div class="card"><div class="empty">Brak pożyczek w tej kategorii.</div></div>` : ''}
     ${lentOut.length ? `
-      <div class="section-title">Wypożyczone innym</div>
+      <div class="section-title">Wypożyczone innym (${lentOut.length})</div>
       <div class="card">${lentOut.map(l => loanRow(l, 'Zwrot')).join('')}</div>
     ` : ''}
     ${borrowedIn.length ? `
-      <div class="section-title">Pożyczone od kogoś</div>
+      <div class="section-title">Pożyczone od kogoś (${borrowedIn.length})</div>
       <div class="card">${borrowedIn.map(l => loanRow(l, 'Oddane')).join('')}</div>
     ` : ''}
   `;
