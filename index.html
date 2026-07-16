@@ -110,6 +110,7 @@ const YEAR_LABELS = { book: 'Rok wydania', movie: 'Rok premiery', music: 'Rok wy
 let state = {
   tab: localStorage.getItem('bib_tab') || 'scan',
   typeFilter: localStorage.getItem('bib_type_filter') || 'all',
+  sortBy: localStorage.getItem('bib_sort') || 'title',
   items: [],
   loans: [],
   scannerRunning: false,
@@ -1092,7 +1093,7 @@ async function saveItem(){
 
 // ---------------- KOLEKCJA TAB ----------------
 function renderList(main){
-  const filtered = state.typeFilter==='all' ? state.items : state.items.filter(i=>i.type===state.typeFilter);
+  const filtered = sortByField(state.typeFilter==='all' ? state.items : state.items.filter(i=>i.type===state.typeFilter));
   main.innerHTML = `
     <div class="row" style="margin-bottom:12px;">
       <button class="btn secondary" onclick="setTab('scan')">+ Dodaj pozycję</button>
@@ -1110,6 +1111,7 @@ function renderList(main){
     <div class="tabs">
       ${['all','book','movie','music'].map(t=>`<button class="${state.typeFilter===t?'active':''}" onclick="setTypeFilter('${t}')">${t==='all'?'Wszystko':TYPE_LABELS[t]}</button>`).join('')}
     </div>
+    ${sortSelect()}
     <div class="card">
       ${filtered.length===0 ? `<div class="empty">Brak pozycji w tej kategorii.</div>` :
         filtered.map(i=>{
@@ -1135,6 +1137,36 @@ function setTypeFilter(t){
   renderTab();
 }
 
+const SORT_OPTIONS = [
+  ['title', 'Tytuł / album'],
+  ['creator', 'Artysta / autor / reżyser'],
+  ['format', 'Format'],
+  ['year', 'Rok']
+];
+
+function sortSelect(){
+  return `<select onchange="setSortBy(this.value)">
+    ${SORT_OPTIONS.map(([v,label])=>`<option value="${v}" ${state.sortBy===v?'selected':''}>Sortuj: ${label}</option>`).join('')}
+  </select>`;
+}
+
+function setSortBy(v){
+  state.sortBy = v;
+  localStorage.setItem('bib_sort', v);
+  renderTab();
+}
+
+function sortByField(list, getItem){
+  const key = state.sortBy || 'title';
+  const collator = new Intl.Collator('pl', { sensitivity: 'base' });
+  return [...list].sort((a, b) => {
+    const ia = getItem ? (getItem(a) || {}) : a;
+    const ib = getItem ? (getItem(b) || {}) : b;
+    if (key === 'year') return (ia.year || 0) - (ib.year || 0);
+    return collator.compare((ia[key] || '').toString(), (ib[key] || '').toString());
+  });
+}
+
 // ---------------- SZUKAJ (dostępne z każdego ekranu) ----------------
 function toggleSearch(){
   state.searchMode = !state.searchMode;
@@ -1152,15 +1184,16 @@ function onSearchInput(){
 
 function renderSearch(main){
   const q = (state.searchQuery || '').trim().toLowerCase();
-  const results = q ? state.items.filter(i =>
+  const results = sortByField(q ? state.items.filter(i =>
     (i.title||'').toLowerCase().includes(q) ||
     (i.creator||'').toLowerCase().includes(q) ||
     (i.publisher||'').toLowerCase().includes(q) ||
     (i.barcode||'').toLowerCase().includes(q) ||
     (i.index_number||'').toLowerCase().includes(q)
-  ) : [];
+  ) : []);
   main.innerHTML = `
     <input id="search-q" value="${escapeHtml(state.searchQuery||'')}" placeholder="Szukaj: tytuł, autor, wydawnictwo, kod…" oninput="onSearchInput()" style="margin-bottom:14px;">
+    ${q ? sortSelect() : ''}
     <div class="card">
       ${!q ? `<div class="empty">Zacznij pisać, żeby przeszukać całą kolekcję.</div>` :
         results.length===0 ? `<div class="empty">Brak wyników dla "${escapeHtml(state.searchQuery)}"</div>` :
@@ -1390,6 +1423,7 @@ function renderLoans(main){
     <div class="tabs">
       ${['all','book','movie','music'].map(t=>`<button class="${state.loanTypeFilter===t?'active':''}" onclick="setLoanTypeFilter('${t}')">${t==='all'?'Wszystko':TYPE_LABELS[t]}</button>`).join('')}
     </div>
+    ${sortSelect()}
   `;
 
   if (state.loans.length===0){
@@ -1397,10 +1431,11 @@ function renderLoans(main){
     return;
   }
 
-  const filtered = state.loanTypeFilter==='all' ? state.loans : state.loans.filter(l=>{
+  const byType = state.loanTypeFilter==='all' ? state.loans : state.loans.filter(l=>{
     const item = state.items.find(i=>i.id===l.item_id);
     return item && item.type === state.loanTypeFilter;
   });
+  const filtered = sortByField(byType, l => state.items.find(i=>i.id===l.item_id));
   const lentOut = filtered.filter(l => l.direction !== 'in');
   const borrowedIn = filtered.filter(l => l.direction === 'in');
 
