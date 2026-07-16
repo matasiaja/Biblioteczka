@@ -1412,6 +1412,14 @@ function renderLoans(main){
   }
   const scanBtn = `<button class="btn secondary" style="margin-bottom:12px;display:flex;align-items:center;justify-content:center;gap:8px;" onclick="startLoanScan()">${icon('scan')} Zeskanuj do zwrotu</button>`;
 
+  const loanTypeOf = l => (state.items.find(i=>i.id===l.item_id) || {}).type;
+  const loanCounts = {
+    all: state.loans.length,
+    book: state.loans.filter(l=>loanTypeOf(l)==='book').length,
+    movie: state.loans.filter(l=>loanTypeOf(l)==='movie').length,
+    music: state.loans.filter(l=>loanTypeOf(l)==='music').length
+  };
+
   const toolbar = `
     <div class="row" style="margin-bottom:12px;">
       <button class="btn secondary" onclick="setTab('scan')">+ Dodaj pozycję</button>
@@ -1427,7 +1435,7 @@ function renderLoans(main){
       </div>
     ` : ''}
     <div class="tabs">
-      ${['all','book','movie','music'].map(t=>`<button class="${state.loanTypeFilter===t?'active':''}" onclick="setLoanTypeFilter('${t}')">${t==='all'?'Wszystko':TYPE_LABELS[t]}</button>`).join('')}
+      ${['all','book','movie','music'].map(t=>`<button class="${state.loanTypeFilter===t?'active':''}" onclick="setLoanTypeFilter('${t}')">${t==='all'?'Wszystko':TYPE_LABELS[t]} (${loanCounts[t]})</button>`).join('')}
     </div>
     ${sortSelect()}
   `;
