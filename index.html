@@ -1512,6 +1512,8 @@ function renderSettings(main){
       <div class="section-title">Statystyki</div>
       <div class="meta">Pozycji w kolekcji: ${state.items.length}</div>
       <div class="meta">Aktualnie pożyczone: ${state.loans.length}</div>
+      <div class="meta">Wypożyczone innym: ${state.loans.filter(l=>l.direction!=='in').length}</div>
+      <div class="meta">Pożyczone od kogoś: ${state.loans.filter(l=>l.direction==='in').length}</div>
     </div>
   `;
 }
