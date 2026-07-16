@@ -1094,6 +1094,12 @@ async function saveItem(){
 // ---------------- KOLEKCJA TAB ----------------
 function renderList(main){
   const filtered = sortByField(state.typeFilter==='all' ? state.items : state.items.filter(i=>i.type===state.typeFilter));
+  const counts = {
+    all: state.items.length,
+    book: state.items.filter(i=>i.type==='book').length,
+    movie: state.items.filter(i=>i.type==='movie').length,
+    music: state.items.filter(i=>i.type==='music').length
+  };
   main.innerHTML = `
     <div class="row" style="margin-bottom:12px;">
       <button class="btn secondary" onclick="setTab('scan')">+ Dodaj pozycję</button>
@@ -1109,7 +1115,7 @@ function renderList(main){
       </div>
     ` : ''}
     <div class="tabs">
-      ${['all','book','movie','music'].map(t=>`<button class="${state.typeFilter===t?'active':''}" onclick="setTypeFilter('${t}')">${t==='all'?'Wszystko':TYPE_LABELS[t]}</button>`).join('')}
+      ${['all','book','movie','music'].map(t=>`<button class="${state.typeFilter===t?'active':''}" onclick="setTypeFilter('${t}')">${t==='all'?'Wszystko':TYPE_LABELS[t]} (${counts[t]})</button>`).join('')}
     </div>
     ${sortSelect()}
     <div class="card">
