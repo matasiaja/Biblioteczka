@@ -119,6 +119,9 @@ let state = {
   loanScanning: false,
   selectMode: false,
   selectedIds: [],
+  loanTypeFilter: 'all',
+  loanSelectMode: false,
+  selectedLoanIds: [],
   searchMode: false,
   searchQuery: ''
 };
@@ -1369,25 +1372,56 @@ function renderLoans(main){
     return;
   }
   const scanBtn = `<button class="btn secondary" style="margin-bottom:12px;display:flex;align-items:center;justify-content:center;gap:8px;" onclick="startLoanScan()">${icon('scan')} Zeskanuj do zwrotu</button>`;
+
+  const toolbar = `
+    <div class="row" style="margin-bottom:12px;">
+      <button class="btn secondary" onclick="setTab('scan')">+ Dodaj pozycję</button>
+      <button class="btn small secondary" style="flex:0 0 auto;" onclick="toggleLoanSelectMode()">${state.loanSelectMode ? 'Gotowe' : 'Zaznacz'}</button>
+    </div>
+    ${state.loanSelectMode ? `
+      <div class="card" style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px;padding:12px;">
+        <span class="meta">Zaznaczono: ${state.selectedLoanIds.length}</span>
+        <div style="display:flex;gap:8px;">
+          <button class="btn small secondary" onclick="cancelLoanSelectMode()">Anuluj</button>
+          <button class="btn small" onclick="bulkReturnLoans()" ${state.selectedLoanIds.length===0?'disabled':''}>Zakończ zaznaczone</button>
+        </div>
+      </div>
+    ` : ''}
+    <div class="tabs">
+      ${['all','book','movie','music'].map(t=>`<button class="${state.loanTypeFilter===t?'active':''}" onclick="setLoanTypeFilter('${t}')">${t==='all'?'Wszystko':TYPE_LABELS[t]}</button>`).join('')}
+    </div>
+  `;
+
   if (state.loans.length===0){
-    main.innerHTML = `${scanBtn}<div class="card"><div class="empty">Nic obecnie nie jest pożyczone.</div></div>`;
+    main.innerHTML = `${scanBtn}${toolbar}<div class="card"><div class="empty">Nic obecnie nie jest pożyczone.</div></div>`;
     return;
   }
-  const lentOut = state.loans.filter(l => l.direction !== 'in');
-  const borrowedIn = state.loans.filter(l => l.direction === 'in');
+
+  const filtered = state.loanTypeFilter==='all' ? state.loans : state.loans.filter(l=>{
+    const item = state.items.find(i=>i.id===l.item_id);
+    return item && item.type === state.loanTypeFilter;
+  });
+  const lentOut = filtered.filter(l => l.direction !== 'in');
+  const borrowedIn = filtered.filter(l => l.direction === 'in');
+
   const loanRow = (l, returnLabel) => {
     const item = state.items.find(i=>i.id===l.item_id);
-    return `<div class="item-row" onclick="openItem('${l.item_id}')">
+    const checked = state.selectedLoanIds.includes(l.id);
+    return `<div class="item-row" onclick="${state.loanSelectMode ? `toggleSelectLoan('${l.id}')` : `openItem('${l.item_id}')`}">
+      ${state.loanSelectMode ? `<input type="checkbox" ${checked?'checked':''} onclick="event.stopPropagation();toggleSelectLoan('${l.id}')" style="width:18px;height:18px;flex-shrink:0;margin:0;">` : ''}
       ${item && item.cover_url ? coverImg(item.cover_url, null, item.type) : `<div class="cover${item && item.type==='music'?' square':''}" style="display:flex;align-items:center;justify-content:center;color:var(--text-dim);">${icon(item ? item.type : 'book')}</div>`}
       <div style="flex:1;">
         <div class="name">${escapeHtml(item ? item.title : '—')}</div>
         <div class="meta">${l.direction==='in'?'od':'u'}: ${escapeHtml(l.borrower_name)} · od ${new Date(l.borrowed_at).toLocaleDateString('pl-PL')}</div>
       </div>
-      <button class="btn small secondary" style="flex:0 0 auto;" onclick="event.stopPropagation();returnLoan('${l.id}')">${returnLabel}</button>
+      ${state.loanSelectMode ? '' : `<button class="btn small secondary" style="flex:0 0 auto;" onclick="event.stopPropagation();returnLoan('${l.id}')">${returnLabel}</button>`}
     </div>`;
   };
+
   main.innerHTML = `
     ${scanBtn}
+    ${toolbar}
+    ${lentOut.length===0 && borrowedIn.length===0 ? `<div class="card"><div class="empty">Brak pożyczek w tej kategorii.</div></div>` : ''}
     ${lentOut.length ? `
       <div class="section-title">Wypożyczone innym</div>
       <div class="card">${lentOut.map(l => loanRow(l, 'Zwrot')).join('')}</div>
@@ -1397,6 +1431,41 @@ function renderLoans(main){
       <div class="card">${borrowedIn.map(l => loanRow(l, 'Oddane')).join('')}</div>
     ` : ''}
   `;
+}
+
+function toggleLoanSelectMode(){
+  state.loanSelectMode = !state.loanSelectMode;
+  if (!state.loanSelectMode) state.selectedLoanIds = [];
+  renderTab();
+}
+
+function cancelLoanSelectMode(){
+  state.loanSelectMode = false;
+  state.selectedLoanIds = [];
+  renderTab();
+}
+
+function toggleSelectLoan(id){
+  const idx = state.selectedLoanIds.indexOf(id);
+  if (idx === -1) state.selectedLoanIds.push(id); else state.selectedLoanIds.splice(idx, 1);
+  renderTab();
+}
+
+function setLoanTypeFilter(t){
+  state.loanTypeFilter = t;
+  renderTab();
+}
+
+async function bulkReturnLoans(){
+  if (state.selectedLoanIds.length === 0) return;
+  if (!confirm(`Oznaczyć ${state.selectedLoanIds.length} pożyczek jako zakończone?`)) return;
+  const { error } = await sb.from('loans').update({ returned_at: new Date().toISOString() }).in('id', state.selectedLoanIds);
+  if (error){ toast('Błąd: ' + error.message); return; }
+  await loadAll();
+  toast(`Zakończono ${state.selectedLoanIds.length} pożyczek`);
+  state.loanSelectMode = false;
+  state.selectedLoanIds = [];
+  renderTab();
 }
 
 function startLoanScan(){
