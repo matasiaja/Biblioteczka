@@ -54,6 +54,7 @@
   .badge.ok{background:rgba(61,220,132,.15);color:var(--ok);}
   .badge.warn{background:rgba(255,176,32,.15);color:var(--warn);}
   .badge.danger{background:rgba(255,77,77,.15);color:var(--danger);}
+  .badge.accent{background:rgba(124,92,255,.15);color:var(--accent);}
   .item-row{display:flex;justify-content:space-between;align-items:center;padding:12px 0;border-bottom:1px solid var(--border);cursor:pointer;gap:10px;}
   .item-row:last-child{border-bottom:none;}
   .item-row .name{font-weight:500;font-size:14px;}
@@ -1228,7 +1229,7 @@ function renderList(main){
             <div style="flex:1;min-width:0;">
               <div class="name">${escapeHtml(i.title)}</div>
               <div class="meta">${escapeHtml(i.creator||'—')}${i.format?' · '+escapeHtml(i.format):''}${i.year?' · '+i.year:''}${i.rating?' · '+starsHtml(i.rating):''}</div>
-              ${loan ? `<span class="badge ${isOverdue(loan)?'danger':'warn'}" style="margin-top:6px;">${loan.direction==='in'?'od':'u'}: ${escapeHtml(loan.borrower_name)} · ${isOverdue(loan)?loanDaysOverdue(loan)+'d po terminie':loanDaysLeft(loan)+'d do zwrotu'}</span>` : ''}
+              ${loan ? `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;"><span class="badge ${isOverdue(loan)?'danger':'warn'}">${loan.direction==='in'?'od':'u'}: ${escapeHtml(loan.borrower_name)}</span><span class="badge accent">${isOverdue(loan)?loanDaysOverdue(loan)+'d po terminie':loanDaysLeft(loan)+'d do zwrotu'}</span></div>` : ''}
             </div>
           </div>`;
         }).join('')}
@@ -1310,7 +1311,7 @@ function renderSearch(main){
             <div style="flex:1;min-width:0;">
               <div class="name">${escapeHtml(i.title)}</div>
               <div class="meta">${escapeHtml(i.creator||'—')}${i.format?' · '+escapeHtml(i.format):''}${i.year?' · '+i.year:''}${i.rating?' · '+starsHtml(i.rating):''}</div>
-              ${loan ? `<span class="badge ${isOverdue(loan)?'danger':'warn'}" style="margin-top:6px;">${loan.direction==='in'?'od':'u'}: ${escapeHtml(loan.borrower_name)} · ${isOverdue(loan)?loanDaysOverdue(loan)+'d po terminie':loanDaysLeft(loan)+'d do zwrotu'}</span>` : ''}
+              ${loan ? `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;"><span class="badge ${isOverdue(loan)?'danger':'warn'}">${loan.direction==='in'?'od':'u'}: ${escapeHtml(loan.borrower_name)}</span><span class="badge accent">${isOverdue(loan)?loanDaysOverdue(loan)+'d po terminie':loanDaysLeft(loan)+'d do zwrotu'}</span></div>` : ''}
             </div>
           </div>`;
         }).join('')}
@@ -1373,8 +1374,10 @@ function openItem(id){
       ${item.rating ? `<div style="color:var(--warn);font-size:18px;margin-bottom:10px;">${starsHtml(item.rating)}</div>` : ''}
       ${item.notes ? `<div class="meta" style="white-space:pre-wrap;margin-bottom:14px;">${escapeHtml(item.notes)}</div>` : ''}
       ${loan ? `
-        <div class="badge ${isOverdue(loan)?'danger':'warn'}" style="margin-bottom:10px;">${loan.direction==='in' ? 'Pożyczone od: '+escapeHtml(loan.borrower_name) : 'Wypożyczone: '+escapeHtml(loan.borrower_name)}</div>
-        ${isOverdue(loan) ? `<div class="meta" style="color:var(--danger);margin-bottom:10px;">Przeterminowane — ${loanDaysOverdue(loan)} dni po terminie</div>` : ''}
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;">
+          <span class="badge ${isOverdue(loan)?'danger':'warn'}">${loan.direction==='in' ? 'Pożyczone od: '+escapeHtml(loan.borrower_name) : 'Wypożyczone: '+escapeHtml(loan.borrower_name)}</span>
+          <span class="badge accent">${isOverdue(loan)?loanDaysOverdue(loan)+'d po terminie':loanDaysLeft(loan)+'d do zwrotu'}</span>
+        </div>
         <label>Data pożyczenia</label>
         <input type="date" id="loan-date-input" value="${toLocalDateInput(loan.borrowed_at)}" onchange="updateLoanDate('${loan.id}','${item.id}')" style="margin-bottom:12px;">
         <label>Termin zwrotu</label>
@@ -1590,7 +1593,8 @@ function renderLoans(main){
       ${item && item.cover_url ? coverImg(item.cover_url, null, item.type) : `<div class="cover${item && item.type==='music'?' square':''}" style="display:flex;align-items:center;justify-content:center;color:var(--text-dim);">${icon(item ? item.type : 'book')}</div>`}
       <div style="flex:1;">
         <div class="name">${escapeHtml(item ? item.title : '—')}</div>
-        <div class="meta" style="${isOverdue(l)?'color:var(--danger);':''}">${l.direction==='in'?'od':'u'}: ${escapeHtml(l.borrower_name)} · od ${new Date(l.borrowed_at).toLocaleDateString('pl-PL')} · ${isOverdue(l)?`przeterminowane (${loanDaysOverdue(l)}d)`:`${loanDaysLeft(l)}d do zwrotu`}</div>
+        <div class="meta" style="${isOverdue(l)?'color:var(--danger);':''}">${l.direction==='in'?'od':'u'}: ${escapeHtml(l.borrower_name)} · od ${new Date(l.borrowed_at).toLocaleDateString('pl-PL')}</div>
+        <span class="badge accent" style="margin-top:4px;">${isOverdue(l)?loanDaysOverdue(l)+'d po terminie':loanDaysLeft(l)+'d do zwrotu'}</span>
       </div>
       ${state.loanSelectMode ? '' : `<button class="btn small secondary" style="flex:0 0 auto;" onclick="event.stopPropagation();returnLoan('${l.id}')">${returnLabel}</button>`}
     </div>`;
