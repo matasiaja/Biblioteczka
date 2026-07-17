@@ -247,14 +247,23 @@ function activeLoanFor(itemId){
   return state.loans.find(l => l.item_id === itemId);
 }
 
-const OVERDUE_DAYS = 30;
+const OVERDUE_DAYS = 30; // domyślny limit, gdy dla pożyczki nie ustawiono własnego terminu zwrotu
 
 function loanDaysActive(loan){
   return Math.floor((Date.now() - new Date(loan.borrowed_at).getTime()) / 86400000);
 }
 
+function loanDueDate(loan){
+  if (loan.due_date) return new Date(loan.due_date + 'T23:59:59');
+  return new Date(new Date(loan.borrowed_at).getTime() + OVERDUE_DAYS * 86400000);
+}
+
+function loanDaysOverdue(loan){
+  return Math.max(0, Math.ceil((Date.now() - loanDueDate(loan).getTime()) / 86400000));
+}
+
 function isOverdue(loan){
-  return loanDaysActive(loan) > OVERDUE_DAYS;
+  return Date.now() > loanDueDate(loan).getTime();
 }
 
 // ---------------- RENDER SHELL ----------------
@@ -1215,7 +1224,7 @@ function renderList(main){
             <div style="flex:1;min-width:0;">
               <div class="name">${escapeHtml(i.title)}</div>
               <div class="meta">${escapeHtml(i.creator||'—')}${i.format?' · '+escapeHtml(i.format):''}${i.year?' · '+i.year:''}${i.rating?' · '+starsHtml(i.rating):''}</div>
-              ${loan ? `<span class="badge ${isOverdue(loan)?'danger':'warn'}" style="margin-top:6px;">${loan.direction==='in'?'od':'u'}: ${escapeHtml(loan.borrower_name)}${isOverdue(loan)?` · ${loanDaysActive(loan)}d`:''}</span>` : ''}
+              ${loan ? `<span class="badge ${isOverdue(loan)?'danger':'warn'}" style="margin-top:6px;">${loan.direction==='in'?'od':'u'}: ${escapeHtml(loan.borrower_name)}${isOverdue(loan)?` · ${loanDaysOverdue(loan)}d po terminie`:''}</span>` : ''}
             </div>
           </div>`;
         }).join('')}
@@ -1297,7 +1306,7 @@ function renderSearch(main){
             <div style="flex:1;min-width:0;">
               <div class="name">${escapeHtml(i.title)}</div>
               <div class="meta">${escapeHtml(i.creator||'—')}${i.format?' · '+escapeHtml(i.format):''}${i.year?' · '+i.year:''}${i.rating?' · '+starsHtml(i.rating):''}</div>
-              ${loan ? `<span class="badge ${isOverdue(loan)?'danger':'warn'}" style="margin-top:6px;">${loan.direction==='in'?'od':'u'}: ${escapeHtml(loan.borrower_name)}${isOverdue(loan)?` · ${loanDaysActive(loan)}d`:''}</span>` : ''}
+              ${loan ? `<span class="badge ${isOverdue(loan)?'danger':'warn'}" style="margin-top:6px;">${loan.direction==='in'?'od':'u'}: ${escapeHtml(loan.borrower_name)}${isOverdue(loan)?` · ${loanDaysOverdue(loan)}d po terminie`:''}</span>` : ''}
             </div>
           </div>`;
         }).join('')}
@@ -1361,9 +1370,11 @@ function openItem(id){
       ${item.notes ? `<div class="meta" style="white-space:pre-wrap;margin-bottom:14px;">${escapeHtml(item.notes)}</div>` : ''}
       ${loan ? `
         <div class="badge ${isOverdue(loan)?'danger':'warn'}" style="margin-bottom:10px;">${loan.direction==='in' ? 'Pożyczone od: '+escapeHtml(loan.borrower_name) : 'Wypożyczone: '+escapeHtml(loan.borrower_name)}</div>
-        ${isOverdue(loan) ? `<div class="meta" style="color:var(--danger);margin-bottom:10px;">Przeterminowane — ${loanDaysActive(loan)} dni (limit: ${OVERDUE_DAYS})</div>` : ''}
+        ${isOverdue(loan) ? `<div class="meta" style="color:var(--danger);margin-bottom:10px;">Przeterminowane — ${loanDaysOverdue(loan)} dni po terminie</div>` : ''}
         <label>Data pożyczenia</label>
         <input type="date" id="loan-date-input" value="${toLocalDateInput(loan.borrowed_at)}" onchange="updateLoanDate('${loan.id}','${item.id}')" style="margin-bottom:12px;">
+        <label>Termin zwrotu <span style="font-weight:400;">(opcjonalnie — domyślnie ${OVERDUE_DAYS} dni od pożyczenia)</span></label>
+        <input type="date" id="due-date-edit-input" value="${loan.due_date || ''}" onchange="updateDueDate('${loan.id}','${item.id}')" style="margin-bottom:12px;">
         <button class="btn" onclick="returnLoan('${loan.id}')">${loan.direction==='in' ? 'Oznacz jako oddane właścicielowi' : 'Oznacz jako zwrócone'}</button>
       ` : renderLendBox(item)}
       <button class="btn secondary" style="margin-top:8px;" onclick="editItem('${item.id}')">Edytuj</button>
@@ -1398,7 +1409,9 @@ function renderLendBox(item){
       <div class="badge ok" style="margin-bottom:12px;">Dostępne</div>
       <input id="borrower-name" placeholder="${isIn ? 'Od kogo pożyczyłeś?' : 'Komu pożyczasz?'}">
       <label>Data pożyczenia</label>
-      <input type="date" id="borrow-date" value="${todayIso()}">
+      <input type="date" id="borrow-date" value="${todayIso()}" onchange="onBorrowDateChange()">
+      <label>Termin zwrotu <span style="font-weight:400;">(opcjonalnie — domyślnie ${OVERDUE_DAYS} dni)</span></label>
+      <input type="date" id="due-date-input" value="${toLocalDateInput(new Date(Date.now() + OVERDUE_DAYS*86400000))}">
       <button class="btn" onclick="lendItem('${item.id}','${mode}')">${isIn ? 'Zapisz' : 'Pożycz'}</button>
       <button class="btn secondary" style="margin-top:8px;" onclick="cancelLendMode('${item.id}')">Anuluj</button>
     `;
@@ -1408,6 +1421,14 @@ function renderLendBox(item){
     <button class="btn" onclick="setLendMode('${item.id}','out')">Pożycz komuś</button>
     <button class="btn secondary" style="margin-top:8px;" onclick="setLendMode('${item.id}','in')">Zarejestruj jako pożyczone od kogoś</button>
   `;
+}
+
+function onBorrowDateChange(){
+  const borrowVal = document.getElementById('borrow-date').value;
+  const dueEl = document.getElementById('due-date-input');
+  if (!borrowVal || !dueEl) return;
+  const borrowDate = new Date(borrowVal + 'T12:00:00');
+  dueEl.value = toLocalDateInput(new Date(borrowDate.getTime() + OVERDUE_DAYS*86400000));
 }
 
 function setLendMode(itemId, mode){
@@ -1425,7 +1446,8 @@ async function lendItem(itemId, direction){
   if (!name){ toast(direction === 'in' ? 'Podaj od kogo pożyczyłeś' : 'Podaj komu pożyczasz'); return; }
   const dateVal = document.getElementById('borrow-date').value || todayIso();
   const borrowed_at = new Date(dateVal + 'T12:00:00').toISOString();
-  const { error } = await sb.from('loans').insert({ item_id: itemId, borrower_name: name, borrowed_at, direction });
+  const due_date = document.getElementById('due-date-input').value || null;
+  const { error } = await sb.from('loans').insert({ item_id: itemId, borrower_name: name, borrowed_at, direction, due_date });
   if (error){ toast('Błąd: ' + error.message); return; }
   await loadAll();
   state.lendMode = null;
@@ -1441,6 +1463,15 @@ async function updateLoanDate(loanId, itemId){
   if (error){ toast('Błąd: ' + error.message); return; }
   await loadAll();
   toast('Zaktualizowano datę pożyczenia');
+  openItem(itemId);
+}
+
+async function updateDueDate(loanId, itemId){
+  const dueVal = document.getElementById('due-date-edit-input').value || null;
+  const { error } = await sb.from('loans').update({ due_date: dueVal }).eq('id', loanId);
+  if (error){ toast('Błąd: ' + error.message); return; }
+  await loadAll();
+  toast(dueVal ? 'Zaktualizowano termin zwrotu' : 'Usunięto własny termin zwrotu (domyślny limit ' + OVERDUE_DAYS + ' dni)');
   openItem(itemId);
 }
 
@@ -1555,7 +1586,7 @@ function renderLoans(main){
       ${item && item.cover_url ? coverImg(item.cover_url, null, item.type) : `<div class="cover${item && item.type==='music'?' square':''}" style="display:flex;align-items:center;justify-content:center;color:var(--text-dim);">${icon(item ? item.type : 'book')}</div>`}
       <div style="flex:1;">
         <div class="name">${escapeHtml(item ? item.title : '—')}</div>
-        <div class="meta" style="${isOverdue(l)?'color:var(--danger);':''}">${l.direction==='in'?'od':'u'}: ${escapeHtml(l.borrower_name)} · od ${new Date(l.borrowed_at).toLocaleDateString('pl-PL')}${isOverdue(l)?` · przeterminowane (${loanDaysActive(l)}d)`:''}</div>
+        <div class="meta" style="${isOverdue(l)?'color:var(--danger);':''}">${l.direction==='in'?'od':'u'}: ${escapeHtml(l.borrower_name)} · od ${new Date(l.borrowed_at).toLocaleDateString('pl-PL')}${isOverdue(l)?` · przeterminowane (${loanDaysOverdue(l)}d)`:''}</div>
       </div>
       ${state.loanSelectMode ? '' : `<button class="btn small secondary" style="flex:0 0 auto;" onclick="event.stopPropagation();returnLoan('${l.id}')">${returnLabel}</button>`}
     </div>`;
