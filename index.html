@@ -129,6 +129,51 @@ let state = {
 
 const app = document.getElementById('app');
 
+// ---------------- NAWIGACJA: fizyczny/systemowy przycisk "Wstecz" ----------------
+// Ta sama logika co w Spotigraj: zakładka 'scan' jest korzeniem — Back z niej zamyka appkę.
+// Pozostałe zakładki są jej dziećmi (replaceState — Back z każdej z nich wraca do 'scan',
+// niezależnie od realnej ścieżki kliknięć). Widoki szczegółowe (formularz dodawania/edycji,
+// szczegóły pozycji, wyszukiwanie) są dziećmi aktywnej zakładki (pushState przy otwarciu —
+// przyciski "X"/"Wróć" w UI same historii nie ruszają, więc jeden fizyczny Back cofa dokładnie
+// jeden poziom, tak jak w Spotigraj).
+let navFoundationReady = false;
+function ensureNavFoundation(){
+  if (navFoundationReady) return;
+  navFoundationReady = true;
+  window.history.replaceState({ tab: state.tab, _foundation: true }, '', '#' + state.tab);
+  window.history.pushState({ tab: state.tab, _foundation: true }, '', '#' + state.tab);
+}
+
+window.addEventListener('popstate', function(){
+  if (!session) return;
+  if (state.lookup){
+    state.lookup = null;
+    state.openItemId = null;
+    renderTab();
+    return;
+  }
+  if (state.openItemId){
+    state.openItemId = null;
+    renderTab();
+    return;
+  }
+  if (state.searchMode){
+    state.searchMode = false;
+    state.searchQuery = '';
+    renderTab();
+    return;
+  }
+  if (state.tab === 'scan') return; // korzeń — Back zamyka appkę
+  state.tab = 'scan';
+  state.scannedBarcode = null;
+  state.scannedItem = null;
+  state.selectMode = false;
+  state.selectedIds = [];
+  localStorage.setItem('bib_tab', 'scan');
+  render();
+  window.history.replaceState({ tab: 'scan' }, '', '#scan');
+});
+
 function configured(){
   return SUPABASE_URL && !SUPABASE_URL.startsWith('TU_') && SUPABASE_ANON_KEY && !SUPABASE_ANON_KEY.startsWith('TU_');
 }
@@ -172,9 +217,10 @@ async function boot(){
   });
   const { data } = await sb.auth.getSession();
   session = data.session;
-  sb.auth.onAuthStateChange((_e, s)=>{ session = s; render(); });
+  sb.auth.onAuthStateChange((_e, s)=>{ session = s; render(); if (session) ensureNavFoundation(); });
   if (session){ await loadAll(); }
   render();
+  if (session) ensureNavFoundation();
 }
 
 function renderNotConfigured(){
@@ -258,6 +304,7 @@ async function setTab(tab){
     await loadAll(); // odśwież — inne urządzenie (np. telefon) mogło coś dodać/zmienić
   }
   render();
+  window.history.replaceState({ tab }, '', '#' + tab);
 }
 
 function renderTab(){
@@ -295,6 +342,7 @@ async function login(){
   if (error){ document.getElementById('login-err').textContent = 'Błędny e-mail lub hasło.'; return; }
   await loadAll();
   render();
+  ensureNavFoundation();
 }
 
 async function logout(){
@@ -375,6 +423,7 @@ function manualBarcode(){
 
 function skipBarcode(){
   state.lookup = { barcode: null, type: 'book', title: '', creator: '', publisher: '', format: '', year: '', cover_url: '' };
+  window.history.pushState({ form: 'new' }, '');
   render();
 }
 
@@ -420,6 +469,7 @@ async function onBarcode(code){
     guess = await lookupBarcodeGeneral(code) || guess;
   }
   state.lookup = { barcode: code, ...guess, debugLog: lookupLog, checksumOk: isValidBarcodeChecksum(code) };
+  window.history.pushState({ form: 'new' }, '');
   render();
 }
 
@@ -1213,6 +1263,7 @@ function sortByField(list, getItem){
 function toggleSearch(){
   state.searchMode = !state.searchMode;
   if (!state.searchMode) state.searchQuery = '';
+  else window.history.pushState({ view: 'search' }, '');
   render();
 }
 
@@ -1291,10 +1342,11 @@ function openItem(id){
   if (!item) return;
   if (state.openItemId !== id) state.lendMode = null;
   state.openItemId = id;
+  window.history.pushState({ item: id }, '');
   const loan = activeLoanFor(id);
   const main = document.getElementById('main');
   main.innerHTML = `
-    <button class="link" onclick="renderTab()">&larr; Wróć do listy</button>
+    <button class="link" onclick="state.openItemId=null;renderTab()">&larr; Wróć do listy</button>
     <div class="card" style="margin-top:12px;">
       ${item.cover_url ? `
         <div style="text-align:center;margin-bottom:2px;cursor:pointer;" onclick="removeSavedCover('${item.id}')" title="Kliknij, żeby usunąć złą okładkę">
@@ -1430,6 +1482,7 @@ function editItem(id){
     checksumOk: item.barcode ? isValidBarcodeChecksum(item.barcode) : true,
     debugLog: []
   };
+  window.history.pushState({ form: 'edit', id }, '');
   render();
 }
 
