@@ -201,6 +201,16 @@ function activeLoanFor(itemId){
   return state.loans.find(l => l.item_id === itemId);
 }
 
+const OVERDUE_DAYS = 30;
+
+function loanDaysActive(loan){
+  return Math.floor((Date.now() - new Date(loan.borrowed_at).getTime()) / 86400000);
+}
+
+function isOverdue(loan){
+  return loanDaysActive(loan) > OVERDUE_DAYS;
+}
+
 // ---------------- RENDER SHELL ----------------
 function render(){
   if (!session){ renderLogin(); return; }
@@ -796,6 +806,12 @@ function renderAddForm(main){
       </select>
       <label id="f-year-label">${YEAR_LABELS[l.type]}</label>
       <input id="f-year" value="${escapeHtml(l.year)}" placeholder="np. 2020" inputmode="numeric">
+      <label>Ocena</label>
+      <div style="margin-bottom:14px;">
+        ${[1,2,3,4,5].map(n=>`<button type="button" onclick="setRating(${n})" style="background:none;border:none;cursor:pointer;font-size:26px;line-height:1;padding:2px 3px;color:${(l.rating||0)>=n?'var(--warn)':'var(--border)'};">★</button>`).join('')}
+      </div>
+      <label>Notatki</label>
+      <textarea id="f-notes" placeholder="Twoje notatki o tej pozycji (opcjonalnie)" rows="3" style="margin-bottom:14px;">${escapeHtml(l.notes||'')}</textarea>
       <button class="btn" onclick="saveItem()">${l.editingId ? 'Zapisz zmiany' : 'Zapisz do kolekcji'}</button>
       <button class="btn secondary" style="margin-top:8px;" onclick="cancelAdd()">Anuluj</button>
     </div>
@@ -987,6 +1003,23 @@ function onTypeChange(){
   render();
 }
 
+function setRating(n){
+  const l = state.lookup;
+  l.title = document.getElementById('f-title').value;
+  l.creator = document.getElementById('f-creator').value;
+  l.format = document.getElementById('f-format').value;
+  l.year = document.getElementById('f-year').value;
+  const notesEl = document.getElementById('f-notes');
+  if (notesEl) l.notes = notesEl.value;
+  l.rating = l.rating === n ? null : n;
+  render();
+}
+
+function starsHtml(rating){
+  const n = Math.max(0, Math.min(5, rating||0));
+  return '★'.repeat(n) + '☆'.repeat(5-n);
+}
+
 function coverImg(url, size, type){
   if (!url) return '';
   const square = type === 'music';
@@ -1056,6 +1089,7 @@ async function saveItem(){
   const barcodeEl = document.getElementById('f-barcode');
   const indexEl = document.getElementById('f-index');
   const publisherEl = document.getElementById('f-publisher');
+  const notesEl = document.getElementById('f-notes');
   const payload = {
     barcode: (barcodeEl ? barcodeEl.value.trim() : l.barcode) || null,
     index_number: (indexEl ? indexEl.value.trim() : '') || null,
@@ -1065,7 +1099,9 @@ async function saveItem(){
     creator: document.getElementById('f-creator').value.trim() || null,
     format: document.getElementById('f-format').value.trim() || null,
     year: parseInt(document.getElementById('f-year').value) || null,
-    cover_url: l.cover_url || null
+    cover_url: l.cover_url || null,
+    notes: (notesEl ? notesEl.value.trim() : '') || null,
+    rating: l.rating || null
   };
   if (!l.editingId){
     const dup = state.items.find(i =>
@@ -1128,8 +1164,8 @@ function renderList(main){
             ${i.cover_url ? coverImg(i.cover_url, null, i.type) : `<div class="cover${i.type==='music'?' square':''}" style="display:flex;align-items:center;justify-content:center;color:var(--text-dim);">${icon(i.type)}</div>`}
             <div style="flex:1;min-width:0;">
               <div class="name">${escapeHtml(i.title)}</div>
-              <div class="meta">${escapeHtml(i.creator||'—')}${i.format?' · '+escapeHtml(i.format):''}${i.year?' · '+i.year:''}</div>
-              ${loan ? `<span class="badge warn" style="margin-top:6px;">${loan.direction==='in'?'od':'u'}: ${escapeHtml(loan.borrower_name)}</span>` : ''}
+              <div class="meta">${escapeHtml(i.creator||'—')}${i.format?' · '+escapeHtml(i.format):''}${i.year?' · '+i.year:''}${i.rating?' · '+starsHtml(i.rating):''}</div>
+              ${loan ? `<span class="badge ${isOverdue(loan)?'danger':'warn'}" style="margin-top:6px;">${loan.direction==='in'?'od':'u'}: ${escapeHtml(loan.borrower_name)}${isOverdue(loan)?` · ${loanDaysActive(loan)}d`:''}</span>` : ''}
             </div>
           </div>`;
         }).join('')}
@@ -1209,8 +1245,8 @@ function renderSearch(main){
             ${i.cover_url ? coverImg(i.cover_url, null, i.type) : `<div class="cover${i.type==='music'?' square':''}" style="display:flex;align-items:center;justify-content:center;color:var(--text-dim);">${icon(i.type)}</div>`}
             <div style="flex:1;min-width:0;">
               <div class="name">${escapeHtml(i.title)}</div>
-              <div class="meta">${escapeHtml(i.creator||'—')}${i.format?' · '+escapeHtml(i.format):''}${i.year?' · '+i.year:''}</div>
-              ${loan ? `<span class="badge warn" style="margin-top:6px;">${loan.direction==='in'?'od':'u'}: ${escapeHtml(loan.borrower_name)}</span>` : ''}
+              <div class="meta">${escapeHtml(i.creator||'—')}${i.format?' · '+escapeHtml(i.format):''}${i.year?' · '+i.year:''}${i.rating?' · '+starsHtml(i.rating):''}</div>
+              ${loan ? `<span class="badge ${isOverdue(loan)?'danger':'warn'}" style="margin-top:6px;">${loan.direction==='in'?'od':'u'}: ${escapeHtml(loan.borrower_name)}${isOverdue(loan)?` · ${loanDaysActive(loan)}d`:''}</span>` : ''}
             </div>
           </div>`;
         }).join('')}
@@ -1269,8 +1305,11 @@ function openItem(id){
       <div class="section-title">${TYPE_LABELS[item.type]}</div>
       <h2 style="margin:0 0 4px;">${escapeHtml(item.title)}</h2>
       <div class="meta mono" style="color:var(--text-dim);margin-bottom:14px;">${escapeHtml(item.creator||'—')}${item.format?' · '+escapeHtml(item.format):''}${item.year?' · '+item.year:''}${item.publisher?' · '+escapeHtml(item.publisher):''}${item.barcode?' · '+escapeHtml(item.barcode):''}${item.index_number?' · Indeks: '+escapeHtml(item.index_number):''}</div>
+      ${item.rating ? `<div style="color:var(--warn);font-size:18px;margin-bottom:10px;">${starsHtml(item.rating)}</div>` : ''}
+      ${item.notes ? `<div class="meta" style="white-space:pre-wrap;margin-bottom:14px;">${escapeHtml(item.notes)}</div>` : ''}
       ${loan ? `
-        <div class="badge warn" style="margin-bottom:10px;">${loan.direction==='in' ? 'Pożyczone od: '+escapeHtml(loan.borrower_name) : 'Wypożyczone: '+escapeHtml(loan.borrower_name)}</div>
+        <div class="badge ${isOverdue(loan)?'danger':'warn'}" style="margin-bottom:10px;">${loan.direction==='in' ? 'Pożyczone od: '+escapeHtml(loan.borrower_name) : 'Wypożyczone: '+escapeHtml(loan.borrower_name)}</div>
+        ${isOverdue(loan) ? `<div class="meta" style="color:var(--danger);margin-bottom:10px;">Przeterminowane — ${loanDaysActive(loan)} dni (limit: ${OVERDUE_DAYS})</div>` : ''}
         <label>Data pożyczenia</label>
         <input type="date" id="loan-date-input" value="${toLocalDateInput(loan.borrowed_at)}" onchange="updateLoanDate('${loan.id}','${item.id}')" style="margin-bottom:12px;">
         <button class="btn" onclick="returnLoan('${loan.id}')">${loan.direction==='in' ? 'Oznacz jako oddane właścicielowi' : 'Oznacz jako zwrócone'}</button>
@@ -1386,6 +1425,8 @@ function editItem(id){
     cover_url: item.cover_url || '',
     index_number: item.index_number || '',
     publisher: item.publisher || '',
+    notes: item.notes || '',
+    rating: item.rating || null,
     checksumOk: item.barcode ? isValidBarcodeChecksum(item.barcode) : true,
     debugLog: []
   };
@@ -1461,7 +1502,7 @@ function renderLoans(main){
       ${item && item.cover_url ? coverImg(item.cover_url, null, item.type) : `<div class="cover${item && item.type==='music'?' square':''}" style="display:flex;align-items:center;justify-content:center;color:var(--text-dim);">${icon(item ? item.type : 'book')}</div>`}
       <div style="flex:1;">
         <div class="name">${escapeHtml(item ? item.title : '—')}</div>
-        <div class="meta">${l.direction==='in'?'od':'u'}: ${escapeHtml(l.borrower_name)} · od ${new Date(l.borrowed_at).toLocaleDateString('pl-PL')}</div>
+        <div class="meta" style="${isOverdue(l)?'color:var(--danger);':''}">${l.direction==='in'?'od':'u'}: ${escapeHtml(l.borrower_name)} · od ${new Date(l.borrowed_at).toLocaleDateString('pl-PL')}${isOverdue(l)?` · przeterminowane (${loanDaysActive(l)}d)`:''}</div>
       </div>
       ${state.loanSelectMode ? '' : `<button class="btn small secondary" style="flex:0 0 auto;" onclick="event.stopPropagation();returnLoan('${l.id}')">${returnLabel}</button>`}
     </div>`;
@@ -1551,6 +1592,16 @@ async function onLoanBarcode(code){
 
 // ---------------- USTAWIENIA TAB ----------------
 function renderSettings(main){
+  const bookCount = state.items.filter(i=>i.type==='book').length;
+  const movieCount = state.items.filter(i=>i.type==='movie').length;
+  const musicCount = state.items.filter(i=>i.type==='music').length;
+  const lentOutCount = state.loans.filter(l=>l.direction!=='in').length;
+  const borrowedInCount = state.loans.filter(l=>l.direction==='in').length;
+  const overdueCount = state.loans.filter(isOverdue).length;
+  const rated = state.items.filter(i=>i.rating);
+  const avgRating = rated.length ? (rated.reduce((s,i)=>s+i.rating,0) / rated.length) : 0;
+  const recent = [...state.items].sort((a,b)=> new Date(b.created_at) - new Date(a.created_at)).slice(0,5);
+
   main.innerHTML = `
     <div class="card">
       <div class="section-title">Konto</div>
@@ -1560,11 +1611,48 @@ function renderSettings(main){
     <div class="card">
       <div class="section-title">Statystyki</div>
       <div class="meta">Pozycji w kolekcji: ${state.items.length}</div>
+      <div class="meta">— Książki: ${bookCount} · Filmy: ${movieCount} · Muzyka: ${musicCount}</div>
       <div class="meta">Aktualnie pożyczone: ${state.loans.length}</div>
-      <div class="meta">Wypożyczone innym: ${state.loans.filter(l=>l.direction!=='in').length}</div>
-      <div class="meta">Pożyczone od kogoś: ${state.loans.filter(l=>l.direction==='in').length}</div>
+      <div class="meta">— Wypożyczone innym: ${lentOutCount} · Pożyczone od kogoś: ${borrowedInCount}</div>
+      ${overdueCount ? `<div class="meta" style="color:var(--danger);">Przeterminowane: ${overdueCount}</div>` : ''}
+      ${rated.length ? `<div class="meta">Średnia ocena: ${avgRating.toFixed(1)}★ (${rated.length} ocenionych)</div>` : ''}
+    </div>
+    ${recent.length ? `
+      <div class="card">
+        <div class="section-title">Ostatnio dodane</div>
+        ${recent.map(i=>`<div class="item-row" onclick="openItem('${i.id}')">
+          ${i.cover_url ? coverImg(i.cover_url, null, i.type) : `<div class="cover${i.type==='music'?' square':''}" style="display:flex;align-items:center;justify-content:center;color:var(--text-dim);">${icon(i.type)}</div>`}
+          <div style="flex:1;min-width:0;">
+            <div class="name">${escapeHtml(i.title)}</div>
+            <div class="meta">${escapeHtml(i.creator||'—')}</div>
+          </div>
+        </div>`).join('')}
+      </div>
+    ` : ''}
+    <div class="card">
+      <div class="section-title">Kopia zapasowa</div>
+      <div class="meta" style="margin-bottom:10px;">Pobierz całą kolekcję i historię wypożyczeń jako plik JSON.</div>
+      <button class="btn secondary" onclick="exportBackup()">Eksportuj kolekcję (JSON)</button>
     </div>
   `;
+}
+
+function exportBackup(){
+  const payload = {
+    exported_at: new Date().toISOString(),
+    items: state.items,
+    loans: state.loans
+  };
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `biblioteczka-backup-${todayIso()}.json`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+  toast('Pobrano kopię zapasową');
 }
 
 document.addEventListener('DOMContentLoaded', boot);
