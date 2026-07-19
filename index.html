@@ -818,7 +818,7 @@ function renderAddForm(main){
         <div style="text-align:center;color:var(--text-dim);font-size:11px;margin-bottom:14px;">kliknij okładkę, żeby ją usunąć</div>
       ` : ''}
       <label>Okładka${l.cover_url ? ' (zmień)' : ''}</label>
-      <input type="file" id="f-cover-file" accept="image/*" capture="environment" onchange="uploadCoverFile()">
+      <input type="file" id="f-cover-file" accept="image/*" onchange="uploadCoverFile()">
       <div id="cover-upload-status" class="meta" style="margin-top:-4px;margin-bottom:10px;"></div>
       <details style="margin-bottom:14px;">
         <summary style="cursor:pointer;color:var(--text-dim);font-size:12px;font-family:'IBM Plex Mono',monospace;">albo wklej link do zdjęcia</summary>
