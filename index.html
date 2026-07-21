@@ -104,7 +104,7 @@ const TYPE_LABELS = { book: 'Książka', movie: 'Film', music: 'Muzyka' };
 const TYPE_FORMATS = {
   book: ['papierowa miękka', 'papierowa twarda'],
   movie: ['DVD', 'Blu-ray', 'VHS'],
-  music: ['CD', 'winyl']
+  music: ['CD', 'winyl', 'kaseta']
 };
 const CREATOR_LABELS = { book: 'Autor', movie: 'Reżyser', music: 'Artysta' };
 const YEAR_LABELS = { book: 'Rok wydania', movie: 'Rok premiery', music: 'Rok wydania' };
@@ -624,6 +624,7 @@ function detectMovieFormat(text){
 function detectMusicFormat(text){
   if (/\b(vinyl|lp)\b/i.test(text)) return 'winyl';
   if (/\bcd\b/i.test(text)) return 'CD';
+  if (/\b(cassette|kaseta|tape|mc)\b/i.test(text)) return 'kaseta';
   return '';
 }
 
@@ -675,6 +676,7 @@ function detectMusicFormatFromMedia(media){
   const fmt = ((media && media.format) || '').toLowerCase();
   if (/vinyl|lp/.test(fmt)) return 'winyl';
   if (/cd/.test(fmt)) return 'CD';
+  if (/cassette/.test(fmt)) return 'kaseta';
   return '';
 }
 
@@ -717,7 +719,7 @@ async function lookupDiscogsByBarcode(code){
     const title = (detail && detail.title) || (r.title||'').split(' - ').slice(1).join(' - ') || r.title || '';
     const creator = (detail && detail.artists && detail.artists.map(a=>a.name).join(', ')) || (r.title||'').split(' - ')[0] || '';
     const formatText = (detail && detail.formats && detail.formats[0] && detail.formats[0].name) || (r.format && r.format[0]) || '';
-    const format = /vinyl/i.test(formatText) ? 'winyl' : /cd/i.test(formatText) ? 'CD' : '';
+    const format = /vinyl/i.test(formatText) ? 'winyl' : /cd/i.test(formatText) ? 'CD' : /cassette/i.test(formatText) ? 'kaseta' : '';
     const year = String((detail && detail.year) || r.year || '').match(/\d{4}/)?.[0] || '';
     const img = (detail && detail.images && detail.images[0] && (detail.images[0].uri150 || detail.images[0].uri)) || '';
     logStep('Discogs', 'znaleziono');
