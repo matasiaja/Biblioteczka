@@ -1386,7 +1386,7 @@ function openItem(id){
         <button class="btn" onclick="returnLoan('${loan.id}')">${loan.direction==='in' ? 'Oznacz jako oddane właścicielowi' : 'Oznacz jako zwrócone'}</button>
       ` : renderLendBox(item)}
       <button class="btn secondary" style="margin-top:8px;" onclick="editItem('${item.id}')">Edytuj</button>
-      <button class="btn secondary" style="margin-top:8px;" onclick="deleteItem('${item.id}')">Usuń z kolekcji</button>
+      <button class="btn danger" style="margin-top:8px;" onclick="deleteItem('${item.id}')">Usuń z kolekcji</button>
     </div>
   `;
 }
