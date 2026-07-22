@@ -1365,10 +1365,10 @@ function openItem(id){
     <button class="link" onclick="state.openItemId=null;renderTab()">&larr; Wróć do listy</button>
     <div class="card" style="margin-top:12px;">
       ${item.cover_url ? `
-        <div style="text-align:center;margin-bottom:2px;cursor:pointer;" onclick="removeSavedCover('${item.id}')" title="Kliknij, żeby usunąć złą okładkę">
+        <div style="text-align:center;margin-bottom:2px;cursor:pointer;" onclick="showCoverLightbox('${item.id}')" title="Kliknij, żeby powiększyć">
           ${coverImg(item.cover_url, 100, item.type)}
         </div>
-        <div style="text-align:center;color:var(--text-dim);font-size:11px;margin-bottom:14px;">kliknij okładkę, żeby ją usunąć</div>
+        <div style="text-align:center;color:var(--text-dim);font-size:11px;margin-bottom:14px;">kliknij okładkę, aby powiększyć &middot; <a href="#" onclick="event.stopPropagation();removeSavedCover('${item.id}');return false;" style="color:var(--text-dim);text-decoration:underline;">usuń okładkę</a></div>
       ` : ''}
       <div class="section-title">${TYPE_LABELS[item.type]}</div>
       <h2 style="margin:0 0 4px;">${escapeHtml(item.title)}</h2>
@@ -1390,6 +1390,32 @@ function openItem(id){
       <button class="btn secondary" style="margin-top:8px;" onclick="deleteItem('${item.id}')">Usuń z kolekcji</button>
     </div>
   `;
+}
+
+function showCoverLightbox(itemId){
+  const item = state.items.find(i=>i.id===itemId);
+  if (!item || !item.cover_url) return;
+  const overlay = document.createElement('div');
+  overlay.id = 'cover-lightbox';
+  overlay.style.cssText = 'position:fixed;inset:0;z-index:1000;background:rgba(0,0,0,0.9);display:flex;align-items:center;justify-content:center;padding:20px;cursor:zoom-out;';
+  overlay.onclick = closeCoverLightbox;
+  const img = document.createElement('img');
+  img.src = item.cover_url;
+  img.alt = '';
+  img.style.cssText = 'max-width:100%;max-height:100%;object-fit:contain;border-radius:8px;';
+  overlay.appendChild(img);
+  document.body.appendChild(overlay);
+  document.addEventListener('keydown', closeCoverLightboxOnEsc);
+}
+
+function closeCoverLightbox(){
+  const overlay = document.getElementById('cover-lightbox');
+  if (overlay) overlay.remove();
+  document.removeEventListener('keydown', closeCoverLightboxOnEsc);
+}
+
+function closeCoverLightboxOnEsc(e){
+  if (e.key === 'Escape') closeCoverLightbox();
 }
 
 async function removeSavedCover(itemId){
