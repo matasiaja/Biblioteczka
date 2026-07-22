@@ -1752,8 +1752,9 @@ function exportBackup(){
 document.addEventListener('DOMContentLoaded', boot);
 
 // Gdy wracasz do karty/appki (np. z innego urządzenia dodano coś w międzyczasie) — odśwież dane.
+// Pomijamy odświeżanie, gdy trwa edycja/dodawanie pozycji, żeby nie skasować niezapisanego formularza.
 document.addEventListener('visibilitychange', async () => {
-  if (document.visibilityState === 'visible' && session){
+  if (document.visibilityState === 'visible' && session && !state.lookup){
     await loadAll();
     if (state.tab === 'list' || state.tab === 'loans') renderTab();
   }
