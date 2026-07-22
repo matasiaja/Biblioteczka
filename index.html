@@ -1453,7 +1453,7 @@ function renderLendBox(item){
   return `
     <div class="badge ok" style="margin-bottom:12px;">Dostępne</div>
     <button class="btn" onclick="setLendMode('${item.id}','out')">Pożycz komuś</button>
-    <button class="btn secondary" style="margin-top:8px;" onclick="setLendMode('${item.id}','in')">Zarejestruj jako pożyczone od kogoś</button>
+    <button class="btn" style="margin-top:8px;background:var(--warn);color:#1a1a1a;" onclick="setLendMode('${item.id}','in')">Zarejestruj jako pożyczone od kogoś</button>
   `;
 }
 
