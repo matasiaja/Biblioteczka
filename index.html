@@ -867,7 +867,6 @@ function renderAddForm(main){
       ` : ''}
       <label>Format</label>
       <select id="f-format">
-        <option value="">— wybierz —</option>
         ${TYPE_FORMATS[l.type].map(f=>`<option value="${escapeHtml(f)}" ${l.format===f?'selected':''}>${escapeHtml(f)}</option>`).join('')}
       </select>
       <label id="f-year-label">${YEAR_LABELS[l.type]}</label>
