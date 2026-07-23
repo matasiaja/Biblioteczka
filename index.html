@@ -144,7 +144,10 @@ let state = {
   selectedLoanIds: [],
   searchMode: false,
   searchQuery: '',
-  dismissedLoanAlert: false
+  dismissedLoanAlert: false,
+  showLoanHistory: false,
+  loanHistory: null,
+  loanHistoryLoading: false
 };
 
 const app = document.getElementById('app');
@@ -1650,6 +1653,7 @@ async function returnLoan(loanId){
   const { error } = await sb.from('loans').update({ returned_at: new Date().toISOString() }).eq('id', loanId);
   if (error){ toast('Błąd: ' + error.message); return; }
   await loadAll();
+  state.loanHistory = null;
   toast(loan && loan.direction === 'in' ? 'Oznaczono jako oddane właścicielowi' : 'Oznaczono zwrot');
   renderTab();
 }
@@ -1733,7 +1737,13 @@ function renderLoans(main){
       ${['all','book','movie','music'].map(t=>`<button class="${state.loanTypeFilter===t?'active':''}" onclick="setLoanTypeFilter('${t}')">${t==='all'?'Wszystko':TYPE_LABELS[t]} (${loanCounts[t]})</button>`).join('')}
     </div>
     ${sortSelect()}
+    <button class="btn small secondary" style="margin-bottom:12px;" onclick="toggleLoanHistory()">${state.showLoanHistory ? 'Ukryj historię' : 'Pokaż historię zwróconych'}</button>
   `;
+
+  if (state.showLoanHistory){
+    main.innerHTML = `${scanBtn}${toolbar}${renderLoanHistoryHtml()}`;
+    return;
+  }
 
   if (state.loans.length===0){
     main.innerHTML = `${scanBtn}${toolbar}<div class="card"><div class="empty">Nic obecnie nie jest pożyczone.</div></div>`;
@@ -1778,6 +1788,42 @@ function renderLoans(main){
   `;
 }
 
+async function toggleLoanHistory(){
+  state.showLoanHistory = !state.showLoanHistory;
+  if (state.showLoanHistory && state.loanHistory === null){
+    state.loanHistoryLoading = true;
+    renderTab();
+    const { data, error } = await sb.from('loans').select('*').not('returned_at', 'is', null).order('returned_at', { ascending: false }).limit(200);
+    state.loanHistoryLoading = false;
+    if (error){ toast('Błąd wczytywania historii: ' + error.message); state.loanHistory = []; }
+    else state.loanHistory = data || [];
+  }
+  renderTab();
+}
+
+function renderLoanHistoryHtml(){
+  if (state.loanHistoryLoading) return `<div class="card"><div class="empty">Wczytywanie…</div></div>`;
+  const history = state.loanHistory || [];
+  const byType = state.loanTypeFilter==='all' ? history : history.filter(l=>{
+    const item = state.items.find(i=>i.id===l.item_id);
+    return item && item.type === state.loanTypeFilter;
+  });
+  if (byType.length === 0) return `<div class="card"><div class="empty">Brak historii zwróconych pożyczek.</div></div>`;
+  return `<div class="section-title">Historia zwróconych (${byType.length})</div>
+    <div class="card">
+      ${byType.map(l => {
+        const item = state.items.find(i=>i.id===l.item_id);
+        return `<div class="item-row" onclick="openItem('${l.item_id}')">
+          ${item && item.cover_url ? coverImg(item.cover_url, null, item.type) : `<div class="cover${item && item.type==='music'?' square':''}" style="display:flex;align-items:center;justify-content:center;color:var(--text-dim);">${icon(item ? item.type : 'book')}</div>`}
+          <div style="flex:1;min-width:0;">
+            <div class="name">${escapeHtml(item ? item.title : '—')}</div>
+            <div class="meta">${l.direction==='in'?'od':'u'}: ${escapeHtml(l.borrower_name)} · ${new Date(l.borrowed_at).toLocaleDateString('pl-PL')} → ${new Date(l.returned_at).toLocaleDateString('pl-PL')}</div>
+          </div>
+        </div>`;
+      }).join('')}
+    </div>`;
+}
+
 function toggleLoanSelectMode(){
   state.loanSelectMode = !state.loanSelectMode;
   if (!state.loanSelectMode) state.selectedLoanIds = [];
@@ -1807,6 +1853,7 @@ async function bulkReturnLoans(){
   const { error } = await sb.from('loans').update({ returned_at: new Date().toISOString() }).in('id', state.selectedLoanIds);
   if (error){ toast('Błąd: ' + error.message); return; }
   await loadAll();
+  state.loanHistory = null;
   toast(`Zakończono ${state.selectedLoanIds.length} pożyczek`);
   state.loanSelectMode = false;
   state.selectedLoanIds = [];
