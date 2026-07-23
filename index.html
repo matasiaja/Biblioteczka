@@ -149,7 +149,8 @@ let state = {
   loanHistory: null,
   loanHistoryLoading: false,
   batchScanMode: localStorage.getItem('bib_batch_scan') === '1',
-  listView: localStorage.getItem('bib_list_view') || 'owned'
+  listView: localStorage.getItem('bib_list_view') || 'owned',
+  addTarget: 'owned'
 };
 
 const app = document.getElementById('app');
@@ -372,6 +373,11 @@ async function setTab(tab){
   window.history.replaceState({ tab }, '', '#' + tab);
 }
 
+async function goAddNew(target){
+  state.addTarget = target === 'wishlist' ? 'wishlist' : 'owned';
+  await setTab('scan');
+}
+
 function renderTab(){
   const main = document.getElementById('main');
   if (state.lookup && state.lookup.editingId){ renderAddForm(main); return; }
@@ -427,7 +433,11 @@ function renderScan(main){
   // Kamera na telefonie (zwłaszcza iOS) wymaga, żeby jej uruchomienie było bezpośrednią
   // reakcją na dotknięcie ekranu — nie da się jej auto-odpalić zaraz po wejściu na zakładkę.
   main.innerHTML = `
-    <div class="card" style="text-align:center;display:flex;flex-direction:column;justify-content:center;align-items:center;min-height:60vh;">
+    <div class="tabs" style="margin-bottom:14px;">
+      <button class="${state.addTarget==='owned'?'active':''}" onclick="setAddTarget('owned')">Do kolekcji</button>
+      <button class="${state.addTarget==='wishlist'?'active':''}" onclick="setAddTarget('wishlist')">Na listę życzeń</button>
+    </div>
+    <div class="card" style="text-align:center;display:flex;flex-direction:column;justify-content:center;align-items:center;min-height:55vh;">
       <div class="scan-hint" style="margin-bottom:20px;">Dotknij, żeby uruchomić kamerę</div>
       <button class="btn" style="max-width:280px;padding:32px;font-size:24px;letter-spacing:1px;" onclick="beginScan()">SKANUJ</button>
     </div>
@@ -440,6 +450,11 @@ function renderScan(main){
       <span class="meta">Tryb ciągłego skanowania — po zapisaniu od razu skanuj kolejną pozycję</span>
     </label>
   `;
+}
+
+function setAddTarget(v){
+  state.addTarget = v;
+  renderTab();
 }
 
 function toggleBatchScanMode(on){
@@ -456,7 +471,7 @@ function beginScan(){
       <div class="corner tl"></div><div class="corner tr"></div>
       <div class="corner bl"></div><div class="corner br"></div>
     </div>
-    <div class="scan-hint">Zeskanuj kod kreskowy okładki / pudełka</div>
+    <div class="scan-hint">${state.addTarget==='wishlist' ? 'Zeskanuj kod — trafi na listę życzeń' : 'Zeskanuj kod kreskowy okładki / pudełka'}</div>
     <div style="margin-top:14px;">
       <button class="btn secondary" onclick="manualBarcode()">Wpisz kod ręcznie</button>
       <button class="btn secondary" style="margin-top:8px;" onclick="skipBarcode()">Dodaj bez kodu</button>
@@ -496,7 +511,7 @@ function manualBarcode(){
 }
 
 function skipBarcode(){
-  state.lookup = { barcode: null, type: 'book', title: '', creator: '', publisher: '', format: '', year: '', cover_url: '' };
+  state.lookup = { barcode: null, type: 'book', title: '', creator: '', publisher: '', format: '', year: '', cover_url: '', status: state.addTarget };
   window.history.pushState({ form: 'new' }, '');
   render();
 }
@@ -542,7 +557,7 @@ async function onBarcode(code){
   } else {
     guess = await lookupBarcodeGeneral(code) || guess;
   }
-  state.lookup = { barcode: code, ...guess, debugLog: lookupLog, checksumOk: isValidBarcodeChecksum(code) };
+  state.lookup = { barcode: code, ...guess, status: state.addTarget, debugLog: lookupLog, checksumOk: isValidBarcodeChecksum(code) };
   window.history.pushState({ form: 'new' }, '');
   render();
 }
@@ -1321,7 +1336,7 @@ function renderList(main){
   const wishlistCount = state.items.filter(i=>i.status==='wishlist').length;
   main.innerHTML = `
     <div class="row" style="margin-bottom:12px;">
-      <button class="btn secondary" onclick="setTab('scan')">+ Dodaj pozycję</button>
+      <button class="btn secondary" onclick="goAddNew('${state.listView}')">+ Dodaj pozycję</button>
       <button class="btn small secondary" style="flex:0 0 auto;" onclick="toggleViewMode()" title="${state.viewMode==='grid' ? 'Widok listy' : 'Widok siatki okładek'}">${state.viewMode==='grid' ? icon('list') : icon('grid')}</button>
       <button class="btn small secondary" style="flex:0 0 auto;" onclick="toggleSelectMode()">${state.selectMode ? 'Gotowe' : 'Zaznacz'}</button>
     </div>
@@ -1761,7 +1776,7 @@ function renderLoans(main){
 
   const toolbar = `
     <div class="row" style="margin-bottom:12px;">
-      <button class="btn secondary" onclick="setTab('scan')">+ Dodaj pozycję</button>
+      <button class="btn secondary" onclick="goAddNew('owned')">+ Dodaj pozycję</button>
       <button class="btn small secondary" style="flex:0 0 auto;" onclick="toggleLoanSelectMode()">${state.loanSelectMode ? 'Gotowe' : 'Zaznacz'}</button>
     </div>
     ${state.loanSelectMode ? `
