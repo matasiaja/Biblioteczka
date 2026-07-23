@@ -1904,6 +1904,25 @@ function renderSettings(main){
   const avgRating = rated.length ? (rated.reduce((s,i)=>s+i.rating,0) / rated.length) : 0;
   const recent = [...state.items].sort((a,b)=> new Date(b.created_at) - new Date(a.created_at)).slice(0,5);
 
+  const formatCounts = {};
+  state.items.forEach(i => { if (i.format) formatCounts[i.format] = (formatCounts[i.format]||0) + 1; });
+  const formatRows = Object.entries(formatCounts).sort((a,b)=>b[1]-a[1]);
+
+  const decadeCounts = {};
+  state.items.forEach(i => { if (i.year) { const d = Math.floor(i.year/10)*10; decadeCounts[d] = (decadeCounts[d]||0) + 1; } });
+  const decadeRows = Object.entries(decadeCounts).sort((a,b)=>a[0]-b[0]);
+
+  const maxFormat = Math.max(1, ...formatRows.map(r=>r[1]));
+  const maxDecade = Math.max(1, ...decadeRows.map(r=>r[1]));
+  const barRow = (label, count, max) => `
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+      <div class="meta" style="width:80px;flex-shrink:0;">${escapeHtml(label)}</div>
+      <div style="flex:1;background:var(--surface-2);border-radius:4px;overflow:hidden;height:16px;">
+        <div style="width:${Math.round(count/max*100)}%;background:var(--accent);height:100%;"></div>
+      </div>
+      <div class="meta" style="width:28px;text-align:right;flex-shrink:0;">${count}</div>
+    </div>`;
+
   main.innerHTML = `
     <div class="card">
       <div class="section-title">Konto</div>
@@ -1919,6 +1938,18 @@ function renderSettings(main){
       ${overdueCount ? `<div class="meta" style="color:var(--danger);">Przeterminowane: ${overdueCount}</div>` : ''}
       ${rated.length ? `<div class="meta">Średnia ocena: ${avgRating.toFixed(1)}★ (${rated.length} ocenionych)</div>` : ''}
     </div>
+    ${formatRows.length ? `
+      <div class="card">
+        <div class="section-title">Wg formatu</div>
+        ${formatRows.map(([label,count])=>barRow(label,count,maxFormat)).join('')}
+      </div>
+    ` : ''}
+    ${decadeRows.length ? `
+      <div class="card">
+        <div class="section-title">Wg dekady</div>
+        ${decadeRows.map(([decade,count])=>barRow(decade+'s',count,maxDecade)).join('')}
+      </div>
+    ` : ''}
     ${recent.length ? `
       <div class="card">
         <div class="section-title">Ostatnio dodane</div>
