@@ -81,6 +81,15 @@
   .config-warn{background:rgba(255,176,32,.1);border:1px solid var(--warn);color:var(--warn);border-radius:10px;padding:14px;font-size:13px;line-height:1.5;margin:16px;}
   .cover{width:44px;height:60px;border-radius:5px;object-fit:cover;background:var(--surface-2);flex-shrink:0;}
   .cover.square{width:60px;height:60px;}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(100px,1fr));gap:14px;}
+  .grid-item{cursor:pointer;}
+  .grid-item .cover{width:100%;height:auto;aspect-ratio:2/3;}
+  .grid-item .cover.square{aspect-ratio:1/1;}
+  .grid-item .grid-placeholder{width:100%;aspect-ratio:2/3;border-radius:5px;background:var(--surface-2);display:flex;align-items:center;justify-content:center;color:var(--text-dim);}
+  .grid-item .grid-placeholder.square{aspect-ratio:1/1;}
+  .grid-item .name{font-size:12px;font-weight:500;margin-top:6px;line-height:1.3;overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;}
+  .grid-item .checkbox-overlay{position:absolute;top:6px;left:6px;width:18px;height:18px;margin:0;z-index:1;}
+  .grid-item-wrap{position:relative;}
 </style>
 </head>
 <body>
@@ -114,6 +123,7 @@ let state = {
   sortBy: localStorage.getItem('bib_sort') || 'title',
   sortDir: localStorage.getItem('bib_sort_dir') || 'asc',
   missingFilter: localStorage.getItem('bib_missing_filter') || 'none',
+  viewMode: localStorage.getItem('bib_view_mode') || 'list',
   items: [],
   loans: [],
   scannerRunning: false,
@@ -190,6 +200,7 @@ function icon(name){
   const icons = {
     scan: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2M7 12h10"/></svg>',
     list: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>',
+    grid: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>',
     loans: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>',
     settings: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>',
     book: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>',
@@ -1238,6 +1249,7 @@ function renderList(main){
   main.innerHTML = `
     <div class="row" style="margin-bottom:12px;">
       <button class="btn secondary" onclick="setTab('scan')">+ Dodaj pozycję</button>
+      <button class="btn small secondary" style="flex:0 0 auto;" onclick="toggleViewMode()" title="${state.viewMode==='grid' ? 'Widok listy' : 'Widok siatki okładek'}">${state.viewMode==='grid' ? icon('list') : icon('grid')}</button>
       <button class="btn small secondary" style="flex:0 0 auto;" onclick="toggleSelectMode()">${state.selectMode ? 'Gotowe' : 'Zaznacz'}</button>
     </div>
     ${state.selectMode ? `
@@ -1254,23 +1266,44 @@ function renderList(main){
     </div>
     ${sortSelect()}
     ${missingSelect()}
-    <div class="card">
-      ${filtered.length===0 ? `<div class="empty">${state.missingFilter!=='none' ? 'Brak pozycji z tym brakiem — wszystko uzupełnione.' : 'Brak pozycji w tej kategorii.'}</div>` :
-        filtered.map(i=>{
-          const loan = activeLoanFor(i.id);
-          const checked = state.selectedIds.includes(i.id);
-          return `<div class="item-row" onclick="${state.selectMode ? `toggleSelect('${i.id}')` : `openItem('${i.id}')`}">
-            ${state.selectMode ? `<input type="checkbox" ${checked?'checked':''} onclick="event.stopPropagation();toggleSelect('${i.id}')" style="width:18px;height:18px;flex-shrink:0;margin:0;">` : ''}
-            ${i.cover_url ? coverImg(i.cover_url, null, i.type) : `<div class="cover${i.type==='music'?' square':''}" style="display:flex;align-items:center;justify-content:center;color:var(--text-dim);">${icon(i.type)}</div>`}
-            <div style="flex:1;min-width:0;">
-              <div class="name">${escapeHtml(i.title)}</div>
-              <div class="meta">${escapeHtml(i.creator||'—')}${i.format?' · '+escapeHtml(i.format):''}${i.year?' · '+i.year:''}${i.rating?' · '+starsHtml(i.rating):''}</div>
-              ${loan ? `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;"><span class="badge ${isOverdue(loan)?'danger':'warn'}">${loan.direction==='in'?'od':'u'}: ${escapeHtml(loan.borrower_name)}</span><span class="badge accent">${isOverdue(loan)?loanDaysOverdue(loan)+'d po terminie':loanDaysLeft(loan)+'d do zwrotu'}</span></div>` : ''}
-            </div>
-          </div>`;
-        }).join('')}
-    </div>
+    ${filtered.length===0 ? `<div class="card"><div class="empty">${state.missingFilter!=='none' ? 'Brak pozycji z tym brakiem — wszystko uzupełnione.' : 'Brak pozycji w tej kategorii.'}</div></div>` :
+      state.viewMode === 'grid' ? `
+        <div class="grid">
+          ${filtered.map(i=>{
+            const checked = state.selectedIds.includes(i.id);
+            return `<div class="grid-item-wrap">
+              ${state.selectMode ? `<input type="checkbox" class="checkbox-overlay" ${checked?'checked':''} onclick="event.stopPropagation();toggleSelect('${i.id}')">` : ''}
+              <div class="grid-item" onclick="${state.selectMode ? `toggleSelect('${i.id}')` : `openItem('${i.id}')`}">
+                ${i.cover_url ? coverImg(i.cover_url, null, i.type) : `<div class="grid-placeholder${i.type==='music'?' square':''}">${icon(i.type)}</div>`}
+                <div class="name">${escapeHtml(i.title)}</div>
+              </div>
+            </div>`;
+          }).join('')}
+        </div>
+      ` : `
+        <div class="card">
+          ${filtered.map(i=>{
+            const loan = activeLoanFor(i.id);
+            const checked = state.selectedIds.includes(i.id);
+            return `<div class="item-row" onclick="${state.selectMode ? `toggleSelect('${i.id}')` : `openItem('${i.id}')`}">
+              ${state.selectMode ? `<input type="checkbox" ${checked?'checked':''} onclick="event.stopPropagation();toggleSelect('${i.id}')" style="width:18px;height:18px;flex-shrink:0;margin:0;">` : ''}
+              ${i.cover_url ? coverImg(i.cover_url, null, i.type) : `<div class="cover${i.type==='music'?' square':''}" style="display:flex;align-items:center;justify-content:center;color:var(--text-dim);">${icon(i.type)}</div>`}
+              <div style="flex:1;min-width:0;">
+                <div class="name">${escapeHtml(i.title)}</div>
+                <div class="meta">${escapeHtml(i.creator||'—')}${i.format?' · '+escapeHtml(i.format):''}${i.year?' · '+i.year:''}${i.rating?' · '+starsHtml(i.rating):''}</div>
+                ${loan ? `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;"><span class="badge ${isOverdue(loan)?'danger':'warn'}">${loan.direction==='in'?'od':'u'}: ${escapeHtml(loan.borrower_name)}</span><span class="badge accent">${isOverdue(loan)?loanDaysOverdue(loan)+'d po terminie':loanDaysLeft(loan)+'d do zwrotu'}</span></div>` : ''}
+              </div>
+            </div>`;
+          }).join('')}
+        </div>
+      `}
   `;
+}
+
+function toggleViewMode(){
+  state.viewMode = state.viewMode === 'grid' ? 'list' : 'grid';
+  localStorage.setItem('bib_view_mode', state.viewMode);
+  renderTab();
 }
 
 function setTypeFilter(t){
