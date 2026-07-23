@@ -112,6 +112,7 @@ let state = {
   tab: localStorage.getItem('bib_tab') || 'scan',
   typeFilter: localStorage.getItem('bib_type_filter') || 'all',
   sortBy: localStorage.getItem('bib_sort') || 'title',
+  sortDir: localStorage.getItem('bib_sort_dir') || 'asc',
   missingFilter: localStorage.getItem('bib_missing_filter') || 'none',
   items: [],
   loans: [],
@@ -1251,10 +1252,8 @@ function renderList(main){
     <div class="tabs">
       ${['all','book','movie','music'].map(t=>`<button class="${state.typeFilter===t?'active':''}" onclick="setTypeFilter('${t}')">${t==='all'?'Wszystko':TYPE_LABELS[t]} (${counts[t]})</button>`).join('')}
     </div>
-    <div class="row" style="margin-bottom:10px;">
-      ${sortSelect()}
-      ${missingSelect()}
-    </div>
+    ${sortSelect()}
+    ${missingSelect()}
     <div class="card">
       ${filtered.length===0 ? `<div class="empty">${state.missingFilter!=='none' ? 'Brak pozycji z tym brakiem — wszystko uzupełnione.' : 'Brak pozycji w tej kategorii.'}</div>` :
         filtered.map(i=>{
@@ -1288,9 +1287,12 @@ const SORT_OPTIONS = [
 ];
 
 function sortSelect(){
-  return `<select onchange="setSortBy(this.value)">
-    ${SORT_OPTIONS.map(([v,label])=>`<option value="${v}" ${state.sortBy===v?'selected':''}>Sortuj: ${label}</option>`).join('')}
-  </select>`;
+  return `<div class="row" style="margin-bottom:10px;">
+    <select onchange="setSortBy(this.value)" style="margin-bottom:0;">
+      ${SORT_OPTIONS.map(([v,label])=>`<option value="${v}" ${state.sortBy===v?'selected':''}>Sortuj: ${label}</option>`).join('')}
+    </select>
+    <button type="button" class="btn small secondary" style="flex:0 0 auto;" onclick="toggleSortDir()" title="${state.sortDir==='desc' ? 'Malejąco (Z-A) — kliknij, aby zmienić na rosnąco' : 'Rosnąco (A-Z) — kliknij, aby zmienić na malejąco'}">${state.sortDir==='desc' ? 'Z-A ↓' : 'A-Z ↑'}</button>
+  </div>`;
 }
 
 function setSortBy(v){
@@ -1299,14 +1301,21 @@ function setSortBy(v){
   renderTab();
 }
 
+function toggleSortDir(){
+  state.sortDir = state.sortDir === 'desc' ? 'asc' : 'desc';
+  localStorage.setItem('bib_sort_dir', state.sortDir);
+  renderTab();
+}
+
 function sortByField(list, getItem){
   const key = state.sortBy || 'title';
+  const dir = state.sortDir === 'desc' ? -1 : 1;
   const collator = new Intl.Collator('pl', { sensitivity: 'base' });
   return [...list].sort((a, b) => {
     const ia = getItem ? (getItem(a) || {}) : a;
     const ib = getItem ? (getItem(b) || {}) : b;
-    if (key === 'year') return (ia.year || 0) - (ib.year || 0);
-    return collator.compare((ia[key] || '').toString(), (ib[key] || '').toString());
+    if (key === 'year') return dir * ((ia.year || 0) - (ib.year || 0));
+    return dir * collator.compare((ia[key] || '').toString(), (ib[key] || '').toString());
   });
 }
 
