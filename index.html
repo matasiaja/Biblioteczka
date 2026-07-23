@@ -112,6 +112,7 @@ let state = {
   tab: localStorage.getItem('bib_tab') || 'scan',
   typeFilter: localStorage.getItem('bib_type_filter') || 'all',
   sortBy: localStorage.getItem('bib_sort') || 'title',
+  missingFilter: localStorage.getItem('bib_missing_filter') || 'none',
   items: [],
   loans: [],
   scannerRunning: false,
@@ -1193,8 +1194,40 @@ async function saveItem(){
 }
 
 // ---------------- KOLEKCJA TAB ----------------
+const MISSING_FIELDS = [
+  ['barcode', 'Kod kreskowy / ISBN'],
+  ['title', 'Tytuł'],
+  ['cover_url', 'Zdjęcie / okładka'],
+  ['creator', 'Autor / reżyser / artysta'],
+  ['format', 'Format'],
+  ['year', 'Rok'],
+  ['publisher', 'Wydawnictwo'],
+  ['index_number', 'Indeks'],
+  ['rating', 'Ocena'],
+  ['notes', 'Notatki']
+];
+
+function isMissingField(item, field){
+  const v = item[field];
+  return v === null || v === undefined || v === '';
+}
+
+function missingSelect(){
+  return `<select onchange="setMissingFilter(this.value)">
+    <option value="none" ${state.missingFilter==='none'?'selected':''}>Braki: bez filtra</option>
+    ${MISSING_FIELDS.map(([v,label])=>`<option value="${v}" ${state.missingFilter===v?'selected':''}>Brak: ${label}</option>`).join('')}
+  </select>`;
+}
+
+function setMissingFilter(v){
+  state.missingFilter = v;
+  localStorage.setItem('bib_missing_filter', v);
+  renderTab();
+}
+
 function renderList(main){
-  const filtered = sortByField(state.typeFilter==='all' ? state.items : state.items.filter(i=>i.type===state.typeFilter));
+  let filtered = sortByField(state.typeFilter==='all' ? state.items : state.items.filter(i=>i.type===state.typeFilter));
+  if (state.missingFilter !== 'none') filtered = filtered.filter(i => isMissingField(i, state.missingFilter));
   const counts = {
     all: state.items.length,
     book: state.items.filter(i=>i.type==='book').length,
@@ -1218,9 +1251,12 @@ function renderList(main){
     <div class="tabs">
       ${['all','book','movie','music'].map(t=>`<button class="${state.typeFilter===t?'active':''}" onclick="setTypeFilter('${t}')">${t==='all'?'Wszystko':TYPE_LABELS[t]} (${counts[t]})</button>`).join('')}
     </div>
-    ${sortSelect()}
+    <div class="row" style="margin-bottom:10px;">
+      ${sortSelect()}
+      ${missingSelect()}
+    </div>
     <div class="card">
-      ${filtered.length===0 ? `<div class="empty">Brak pozycji w tej kategorii.</div>` :
+      ${filtered.length===0 ? `<div class="empty">${state.missingFilter!=='none' ? 'Brak pozycji z tym brakiem — wszystko uzupełnione.' : 'Brak pozycji w tej kategorii.'}</div>` :
         filtered.map(i=>{
           const loan = activeLoanFor(i.id);
           const checked = state.selectedIds.includes(i.id);
