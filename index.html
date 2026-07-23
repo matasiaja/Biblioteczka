@@ -147,7 +147,8 @@ let state = {
   dismissedLoanAlert: false,
   showLoanHistory: false,
   loanHistory: null,
-  loanHistoryLoading: false
+  loanHistoryLoading: false,
+  batchScanMode: localStorage.getItem('bib_batch_scan') === '1'
 };
 
 const app = document.getElementById('app');
@@ -433,7 +434,16 @@ function renderScan(main){
       <button class="btn secondary" onclick="manualBarcode()">Wpisz kod ręcznie</button>
       <button class="btn secondary" style="margin-top:8px;" onclick="skipBarcode()">Dodaj bez kodu</button>
     </div>
+    <label style="display:flex;align-items:center;gap:8px;margin-top:16px;cursor:pointer;">
+      <input type="checkbox" style="width:18px;height:18px;margin:0;" ${state.batchScanMode?'checked':''} onchange="toggleBatchScanMode(this.checked)">
+      <span class="meta">Tryb ciągłego skanowania — po zapisaniu od razu skanuj kolejną pozycję</span>
+    </label>
   `;
+}
+
+function toggleBatchScanMode(on){
+  state.batchScanMode = on;
+  localStorage.setItem('bib_batch_scan', on ? '1' : '0');
 }
 
 function beginScan(){
@@ -1257,6 +1267,7 @@ async function saveItem(){
   state.lookup = null;
   toast(wasEditing ? 'Zapisano zmiany' : 'Dodano do kolekcji');
   render();
+  if (!wasEditing && state.batchScanMode && state.tab === 'scan') beginScan();
 }
 
 // ---------------- KOLEKCJA TAB ----------------
