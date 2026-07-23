@@ -821,10 +821,28 @@ async function lookupMovieDetails(title){
   return null;
 }
 
+function findDuplicateItem(l){
+  if (!l || l.editingId) return null;
+  const barcode = (l.barcode || '').trim();
+  const title = (l.title || '').trim().toLowerCase();
+  const creator = (l.creator || '').trim().toLowerCase();
+  return state.items.find(i =>
+    (barcode && i.barcode === barcode) ||
+    (title && i.title.trim().toLowerCase() === title && (i.creator||'').trim().toLowerCase() === creator)
+  ) || null;
+}
+
 function renderAddForm(main){
   const l = state.lookup;
+  const dup = findDuplicateItem(l);
   main.innerHTML = `
     <div class="section-title">${l.editingId ? 'Edytuj pozycję' : 'Nowa pozycja'}</div>
+    ${dup ? `
+      <div class="card" style="background:rgba(255,176,32,.1);border:1px solid var(--warn);margin-bottom:12px;padding:12px;">
+        <div style="color:var(--warn);font-size:13px;margin-bottom:8px;">⚠ Masz już podobną pozycję w kolekcji: <strong>${escapeHtml(dup.title)}</strong>${dup.creator?' — '+escapeHtml(dup.creator):''}</div>
+        <button type="button" class="btn small secondary" onclick="state.lookup=null;openItem('${dup.id}')">Otwórz istniejącą pozycję</button>
+      </div>
+    ` : ''}
     <div class="card">
       ${l.cover_url ? `
         <div style="text-align:center;margin-bottom:4px;">
