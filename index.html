@@ -1316,15 +1316,21 @@ const SORT_OPTIONS = [
   ['title', 'Tytuł / album'],
   ['creator', 'Artysta / autor / reżyser'],
   ['format', 'Format'],
-  ['year', 'Rok']
+  ['year', 'Rok'],
+  ['created_at', 'Data dodania']
 ];
+const SORT_NUMERIC_KEYS = ['year', 'created_at'];
 
 function sortSelect(){
+  const numeric = SORT_NUMERIC_KEYS.includes(state.sortBy);
+  const label = state.sortDir === 'desc'
+    ? (numeric ? '↓ malejąco' : 'Z-A ↓')
+    : (numeric ? '↑ rosnąco' : 'A-Z ↑');
   return `<div class="row" style="margin-bottom:10px;">
     <select onchange="setSortBy(this.value)" style="margin-bottom:0;">
       ${SORT_OPTIONS.map(([v,label])=>`<option value="${v}" ${state.sortBy===v?'selected':''}>Sortuj: ${label}</option>`).join('')}
     </select>
-    <button type="button" class="btn small secondary" style="flex:0 0 auto;" onclick="toggleSortDir()" title="${state.sortDir==='desc' ? 'Malejąco (Z-A) — kliknij, aby zmienić na rosnąco' : 'Rosnąco (A-Z) — kliknij, aby zmienić na malejąco'}">${state.sortDir==='desc' ? 'Z-A ↓' : 'A-Z ↑'}</button>
+    <button type="button" class="btn small secondary" style="flex:0 0 auto;" onclick="toggleSortDir()" title="${state.sortDir==='desc' ? 'Malejąco — kliknij, aby zmienić na rosnąco' : 'Rosnąco — kliknij, aby zmienić na malejąco'}">${label}</button>
   </div>`;
 }
 
@@ -1348,6 +1354,7 @@ function sortByField(list, getItem){
     const ia = getItem ? (getItem(a) || {}) : a;
     const ib = getItem ? (getItem(b) || {}) : b;
     if (key === 'year') return dir * ((ia.year || 0) - (ib.year || 0));
+    if (key === 'created_at') return dir * (new Date(ia.created_at || 0) - new Date(ib.created_at || 0));
     return dir * collator.compare((ia[key] || '').toString(), (ib[key] || '').toString());
   });
 }
