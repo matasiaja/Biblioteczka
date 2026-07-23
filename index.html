@@ -1304,6 +1304,9 @@ const MISSING_FIELDS = [
   ['rating', 'Ocena'],
   ['notes', 'Notatki']
 ];
+// Wydawnictwo i Indeks dotyczą tylko książek (formularz nie pokazuje ich dla filmów/muzyki),
+// więc dla innych typów każda pozycja "brakowałaby" tego pola — filtr pomija wtedy nie-książki.
+const BOOK_ONLY_MISSING_FIELDS = ['publisher', 'index_number'];
 
 function isMissingField(item, field){
   const v = item[field];
@@ -1326,7 +1329,9 @@ function setMissingFilter(v){
 function renderList(main){
   const byStatus = state.items.filter(i => (i.status||'owned') === state.listView);
   let filtered = sortByField(state.typeFilter==='all' ? byStatus : byStatus.filter(i=>i.type===state.typeFilter));
-  if (state.missingFilter !== 'none') filtered = filtered.filter(i => isMissingField(i, state.missingFilter));
+  if (state.missingFilter !== 'none') filtered = filtered.filter(i =>
+    !(BOOK_ONLY_MISSING_FIELDS.includes(state.missingFilter) && i.type !== 'book') && isMissingField(i, state.missingFilter)
+  );
   const counts = {
     all: byStatus.length,
     book: byStatus.filter(i=>i.type==='book').length,
