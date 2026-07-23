@@ -143,7 +143,8 @@ let state = {
   loanSelectMode: false,
   selectedLoanIds: [],
   searchMode: false,
-  searchQuery: ''
+  searchQuery: '',
+  dismissedLoanAlert: false
 };
 
 const app = document.getElementById('app');
@@ -238,7 +239,7 @@ async function boot(){
   const { data } = await sb.auth.getSession();
   session = data.session;
   sb.auth.onAuthStateChange((_e, s)=>{ session = s; render(); if (session) ensureNavFoundation(); });
-  if (session){ await loadAll(); }
+  if (session){ await loadAll(); maybeNotifyLoanAlerts(); }
   render();
   if (session) ensureNavFoundation();
 }
@@ -290,9 +291,24 @@ function isOverdue(loan){
   return Date.now() > loanDueDate(loan).getTime();
 }
 
+const DUE_SOON_DAYS = 3;
+
+function getLoanAlerts(){
+  const overdue = state.loans.filter(isOverdue);
+  const dueSoon = state.loans.filter(l => !isOverdue(l) && loanDaysLeft(l) <= DUE_SOON_DAYS);
+  return { overdue, dueSoon };
+}
+
+function dismissLoanAlert(){
+  state.dismissedLoanAlert = true;
+  render();
+}
+
 // ---------------- RENDER SHELL ----------------
 function render(){
   if (!session){ renderLogin(); return; }
+  const { overdue, dueSoon } = getLoanAlerts();
+  const showAlert = !state.dismissedLoanAlert && state.tab !== 'loans' && (overdue.length || dueSoon.length);
   app.innerHTML = `
     <header class="topbar">
       <div style="display:flex;align-items:center;gap:10px;">
@@ -304,6 +320,17 @@ function render(){
         <button class="link" onclick="logout()">Wyloguj</button>
       </div>
     </header>
+    ${showAlert ? `
+      <div class="card" style="margin:12px 16px 0;background:rgba(255,77,77,.1);border:1px solid var(--danger);display:flex;justify-content:space-between;align-items:center;gap:10px;padding:12px;">
+        <span style="font-size:13px;color:var(--danger);">
+          ${overdue.length ? `Przeterminowane wypożyczenia: ${overdue.length}` : ''}${overdue.length && dueSoon.length ? ' · ' : ''}${dueSoon.length ? `Termin zwrotu za ≤${DUE_SOON_DAYS} dni: ${dueSoon.length}` : ''}
+        </span>
+        <div style="display:flex;gap:8px;flex-shrink:0;">
+          <button class="btn small secondary" onclick="setTab('loans')">Pokaż</button>
+          <button class="btn small secondary" onclick="dismissLoanAlert()">${icon('x')}</button>
+        </div>
+      </div>
+    ` : ''}
     <main id="main"></main>
     <nav class="bottom">
       ${navBtn('scan','Dodaj')}
@@ -1858,11 +1885,40 @@ function renderSettings(main){
       </div>
     ` : ''}
     <div class="card">
+      <div class="section-title">Powiadomienia</div>
+      <div class="meta" style="margin-bottom:10px;">Przypomnienie o zbliżającym się lub przekroczonym terminie zwrotu, gdy otwierasz appkę.</div>
+      ${notificationStatusHtml()}
+    </div>
+    <div class="card">
       <div class="section-title">Kopia zapasowa</div>
       <div class="meta" style="margin-bottom:10px;">Pobierz całą kolekcję i historię wypożyczeń jako plik JSON.</div>
       <button class="btn secondary" onclick="exportBackup()">Eksportuj kolekcję (JSON)</button>
     </div>
   `;
+}
+
+function notificationStatusHtml(){
+  if (!('Notification' in window)) return `<div class="meta">Ta przeglądarka nie obsługuje powiadomień.</div>`;
+  if (Notification.permission === 'granted') return `<div class="meta" style="color:var(--ok);">Powiadomienia włączone ✓</div>`;
+  if (Notification.permission === 'denied') return `<div class="meta" style="color:var(--danger);">Powiadomienia zablokowane w przeglądarce — włącz je w ustawieniach witryny.</div>`;
+  return `<button class="btn secondary" onclick="requestLoanNotifications()">Włącz powiadomienia</button>`;
+}
+
+async function requestLoanNotifications(){
+  if (!('Notification' in window)){ toast('Ta przeglądarka nie obsługuje powiadomień'); return; }
+  const perm = await Notification.requestPermission();
+  renderTab();
+  if (perm === 'granted') maybeNotifyLoanAlerts();
+}
+
+function maybeNotifyLoanAlerts(){
+  if (!('Notification' in window) || Notification.permission !== 'granted') return;
+  const { overdue, dueSoon } = getLoanAlerts();
+  if (!overdue.length && !dueSoon.length) return;
+  const parts = [];
+  if (overdue.length) parts.push(`Przeterminowane: ${overdue.length}`);
+  if (dueSoon.length) parts.push(`Termin za ≤${DUE_SOON_DAYS} dni: ${dueSoon.length}`);
+  new Notification('Biblioteczka — wypożyczenia', { body: parts.join(' · '), icon: 'icons/icon-192.png' });
 }
 
 function exportBackup(){
