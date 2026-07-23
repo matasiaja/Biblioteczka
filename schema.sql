@@ -18,12 +18,14 @@ create table items (
   cover_url text,
   notes text,
   rating integer check (rating between 1 and 5),
+  status text not null default 'owned' check (status in ('owned','wishlist')), -- 'wishlist' = chcę kupić, jeszcze nie mam
   created_at timestamptz default now(),
   updated_at timestamptz default now()
 );
 
 create index items_barcode_idx on items(barcode);
 create index items_type_idx on items(type);
+create index items_status_idx on items(status);
 
 -- Historia i aktualny stan wypożyczeń
 -- direction 'out' = ja pożyczam ten przedmiot komuś (mój, ktoś go ma)
@@ -78,3 +80,10 @@ create policy "Public read covers" on storage.objects for select using (bucket_i
 create policy "Authenticated upload covers" on storage.objects for insert to authenticated with check (bucket_id = 'covers');
 create policy "Authenticated update covers" on storage.objects for update to authenticated using (bucket_id = 'covers');
 create policy "Authenticated delete covers" on storage.objects for delete to authenticated using (bucket_id = 'covers');
+
+-- ============================================
+-- MIGRACJA: lista życzeń (uruchom ręcznie w SQL Editorze, jeśli baza już istnieje —
+-- powyższy `create table items` już zawiera tę kolumnę dla nowych instalacji)
+-- ============================================
+alter table items add column if not exists status text not null default 'owned' check (status in ('owned','wishlist'));
+create index if not exists items_status_idx on items(status);

@@ -148,7 +148,8 @@ let state = {
   showLoanHistory: false,
   loanHistory: null,
   loanHistoryLoading: false,
-  batchScanMode: localStorage.getItem('bib_batch_scan') === '1'
+  batchScanMode: localStorage.getItem('bib_batch_scan') === '1',
+  listView: localStorage.getItem('bib_list_view') || 'owned'
 };
 
 const app = document.getElementById('app');
@@ -954,6 +955,10 @@ function renderAddForm(main){
       </div>
       <label>Notatki</label>
       <textarea id="f-notes" placeholder="Twoje notatki o tej pozycji (opcjonalnie)" rows="3" style="margin-bottom:14px;">${escapeHtml(l.notes||'')}</textarea>
+      <label style="display:flex;align-items:center;gap:8px;margin-bottom:14px;cursor:pointer;">
+        <input type="checkbox" id="f-wishlist" style="width:18px;height:18px;margin:0;" ${l.status==='wishlist'?'checked':''}>
+        <span>Lista życzeń (jeszcze tego nie mam, chcę kupić)</span>
+      </label>
       <button class="btn" onclick="saveItem()">${l.editingId ? 'Zapisz zmiany' : 'Zapisz do kolekcji'}</button>
       <button class="btn secondary" style="margin-top:8px;" onclick="cancelAdd()">Anuluj</button>
     </div>
@@ -1243,7 +1248,8 @@ async function saveItem(){
     year: parseInt(document.getElementById('f-year').value) || null,
     cover_url: l.cover_url || null,
     notes: (notesEl ? notesEl.value.trim() : '') || null,
-    rating: l.rating || null
+    rating: l.rating || null,
+    status: document.getElementById('f-wishlist').checked ? 'wishlist' : 'owned'
   };
   if (!l.editingId){
     const dup = state.items.find(i =>
@@ -1303,19 +1309,25 @@ function setMissingFilter(v){
 }
 
 function renderList(main){
-  let filtered = sortByField(state.typeFilter==='all' ? state.items : state.items.filter(i=>i.type===state.typeFilter));
+  const byStatus = state.items.filter(i => (i.status||'owned') === state.listView);
+  let filtered = sortByField(state.typeFilter==='all' ? byStatus : byStatus.filter(i=>i.type===state.typeFilter));
   if (state.missingFilter !== 'none') filtered = filtered.filter(i => isMissingField(i, state.missingFilter));
   const counts = {
-    all: state.items.length,
-    book: state.items.filter(i=>i.type==='book').length,
-    movie: state.items.filter(i=>i.type==='movie').length,
-    music: state.items.filter(i=>i.type==='music').length
+    all: byStatus.length,
+    book: byStatus.filter(i=>i.type==='book').length,
+    movie: byStatus.filter(i=>i.type==='movie').length,
+    music: byStatus.filter(i=>i.type==='music').length
   };
+  const wishlistCount = state.items.filter(i=>i.status==='wishlist').length;
   main.innerHTML = `
     <div class="row" style="margin-bottom:12px;">
       <button class="btn secondary" onclick="setTab('scan')">+ Dodaj pozycję</button>
       <button class="btn small secondary" style="flex:0 0 auto;" onclick="toggleViewMode()" title="${state.viewMode==='grid' ? 'Widok listy' : 'Widok siatki okładek'}">${state.viewMode==='grid' ? icon('list') : icon('grid')}</button>
       <button class="btn small secondary" style="flex:0 0 auto;" onclick="toggleSelectMode()">${state.selectMode ? 'Gotowe' : 'Zaznacz'}</button>
+    </div>
+    <div class="tabs">
+      <button class="${state.listView==='owned'?'active':''}" onclick="setListView('owned')">Kolekcja</button>
+      <button class="${state.listView==='wishlist'?'active':''}" onclick="setListView('wishlist')">Lista życzeń${wishlistCount?` (${wishlistCount})`:''}</button>
     </div>
     ${state.selectMode ? `
       <div class="card" style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px;padding:12px;">
@@ -1374,6 +1386,12 @@ function toggleViewMode(){
 function setTypeFilter(t){
   state.typeFilter = t;
   localStorage.setItem('bib_type_filter', t);
+  renderTab();
+}
+
+function setListView(v){
+  state.listView = v;
+  localStorage.setItem('bib_list_view', v);
   renderTab();
 }
 
@@ -1519,12 +1537,14 @@ function openItem(id){
         </div>
         <div style="text-align:center;color:var(--text-dim);font-size:11px;margin-bottom:14px;">kliknij okładkę, aby powiększyć &middot; <a href="#" onclick="event.stopPropagation();removeSavedCover('${item.id}');return false;" style="color:var(--text-dim);text-decoration:underline;">usuń okładkę</a></div>
       ` : ''}
-      <div class="section-title">${TYPE_LABELS[item.type]}</div>
+      <div class="section-title">${TYPE_LABELS[item.type]}${item.status==='wishlist' ? ' · Lista życzeń' : ''}</div>
       <h2 style="margin:0 0 4px;">${escapeHtml(item.title)}</h2>
       <div class="meta mono" style="color:var(--text-dim);margin-bottom:14px;">${escapeHtml(item.creator||'—')}${item.format?' · '+escapeHtml(item.format):''}${item.year?' · '+item.year:''}${item.publisher?' · '+escapeHtml(item.publisher):''}${item.barcode?' · '+escapeHtml(item.barcode):''}${item.index_number?' · Indeks: '+escapeHtml(item.index_number):''}</div>
       ${item.rating ? `<div style="color:var(--warn);font-size:18px;margin-bottom:10px;">${starsHtml(item.rating)}</div>` : ''}
       ${item.notes ? `<div class="meta" style="white-space:pre-wrap;margin-bottom:14px;">${escapeHtml(item.notes)}</div>` : ''}
-      ${loan ? `
+      ${item.status==='wishlist' ? `
+        <button class="btn" onclick="markAsOwned('${item.id}')">Oznacz jako kupione</button>
+      ` : loan ? `
         <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;">
           <span class="badge ${isOverdue(loan)?'danger':'warn'}">${loan.direction==='in' ? 'Pożyczone od: '+escapeHtml(loan.borrower_name) : 'Wypożyczone: '+escapeHtml(loan.borrower_name)}</span>
           <span class="badge accent">${isOverdue(loan)?loanDaysOverdue(loan)+'d po terminie':loanDaysLeft(loan)+'d do zwrotu'}</span>
@@ -1565,6 +1585,14 @@ function closeCoverLightbox(){
 
 function closeCoverLightboxOnEsc(e){
   if (e.key === 'Escape') closeCoverLightbox();
+}
+
+async function markAsOwned(itemId){
+  const { error } = await sb.from('items').update({ status: 'owned' }).eq('id', itemId);
+  if (error){ toast('Błąd: ' + error.message); return; }
+  await loadAll();
+  toast('Przeniesiono do kolekcji 🎉');
+  openItem(itemId);
 }
 
 async function removeSavedCover(itemId){
@@ -1695,6 +1723,7 @@ function editItem(id){
     publisher: item.publisher || '',
     notes: item.notes || '',
     rating: item.rating || null,
+    status: item.status || 'owned',
     checksumOk: item.barcode ? isValidBarcodeChecksum(item.barcode) : true,
     debugLog: []
   };
@@ -1905,22 +1934,24 @@ async function onLoanBarcode(code){
 
 // ---------------- USTAWIENIA TAB ----------------
 function renderSettings(main){
-  const bookCount = state.items.filter(i=>i.type==='book').length;
-  const movieCount = state.items.filter(i=>i.type==='movie').length;
-  const musicCount = state.items.filter(i=>i.type==='music').length;
+  const owned = state.items.filter(i => (i.status||'owned') === 'owned');
+  const wishlistCount = state.items.length - owned.length;
+  const bookCount = owned.filter(i=>i.type==='book').length;
+  const movieCount = owned.filter(i=>i.type==='movie').length;
+  const musicCount = owned.filter(i=>i.type==='music').length;
   const lentOutCount = state.loans.filter(l=>l.direction!=='in').length;
   const borrowedInCount = state.loans.filter(l=>l.direction==='in').length;
   const overdueCount = state.loans.filter(isOverdue).length;
-  const rated = state.items.filter(i=>i.rating);
+  const rated = owned.filter(i=>i.rating);
   const avgRating = rated.length ? (rated.reduce((s,i)=>s+i.rating,0) / rated.length) : 0;
-  const recent = [...state.items].sort((a,b)=> new Date(b.created_at) - new Date(a.created_at)).slice(0,5);
+  const recent = [...owned].sort((a,b)=> new Date(b.created_at) - new Date(a.created_at)).slice(0,5);
 
   const formatCounts = {};
-  state.items.forEach(i => { if (i.format) formatCounts[i.format] = (formatCounts[i.format]||0) + 1; });
+  owned.forEach(i => { if (i.format) formatCounts[i.format] = (formatCounts[i.format]||0) + 1; });
   const formatRows = Object.entries(formatCounts).sort((a,b)=>b[1]-a[1]);
 
   const decadeCounts = {};
-  state.items.forEach(i => { if (i.year) { const d = Math.floor(i.year/10)*10; decadeCounts[d] = (decadeCounts[d]||0) + 1; } });
+  owned.forEach(i => { if (i.year) { const d = Math.floor(i.year/10)*10; decadeCounts[d] = (decadeCounts[d]||0) + 1; } });
   const decadeRows = Object.entries(decadeCounts).sort((a,b)=>a[0]-b[0]);
 
   const maxFormat = Math.max(1, ...formatRows.map(r=>r[1]));
@@ -1942,8 +1973,9 @@ function renderSettings(main){
     </div>
     <div class="card">
       <div class="section-title">Statystyki</div>
-      <div class="meta">Pozycji w kolekcji: ${state.items.length}</div>
+      <div class="meta">Pozycji w kolekcji: ${owned.length}</div>
       <div class="meta">— Książki: ${bookCount} · Filmy: ${movieCount} · Muzyka: ${musicCount}</div>
+      ${wishlistCount ? `<div class="meta">Na liście życzeń: ${wishlistCount}</div>` : ''}
       <div class="meta">Aktualnie pożyczone: ${state.loans.length}</div>
       <div class="meta">— Wypożyczone innym: ${lentOutCount} · Pożyczone od kogoś: ${borrowedInCount}</div>
       ${overdueCount ? `<div class="meta" style="color:var(--danger);">Przeterminowane: ${overdueCount}</div>` : ''}
