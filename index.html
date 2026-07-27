@@ -729,6 +729,10 @@ const LISTING_NOISE = [
 const CODE_LABEL_RE = /\b(upc|ean|isbn|asin|sku|mpn|model)\s*[:#]?\s*[a-z0-9-]{4,}\b/gi;
 const BARE_CODE_RE = /\b\d{6,}\b/g;
 const DECOR_CHARS_RE = /[★☆●○◆◇■□▲▼✦✧♦♥~_*]+/g;
+// Ogłoszenia z UPCitemdb często doklejają obsadę, np. "Starring Denzel Washington, Russell Crowe"
+// albo samą listę nazwisk na końcu tytułu — to nie jest część tytułu, więc wycinamy.
+const CAST_KEYWORD_RE = /\b(starring|feat\.?|featuring|with)\s+.+$/i;
+const TRAILING_NAME_LIST_RE = /(?:\s*[-–—:|,]\s*[A-Z][a-zà-ž'.]+(?:\s+[A-Z][a-zà-ž'.]+){1,3}){2,}\s*$/;
 
 function cleanListingTitle(text){
   const original = (text || '').trim();
@@ -739,6 +743,8 @@ function cleanListingTitle(text){
   t = t.replace(CODE_LABEL_RE, ' ');
   t = t.replace(BARE_CODE_RE, ' ');
   for (const re of LISTING_NOISE) t = t.replace(re, ' ');
+  t = t.replace(CAST_KEYWORD_RE, ' ');
+  t = t.replace(TRAILING_NAME_LIST_RE, ' ');
   t = t.replace(/(?:\s*[-–—:|,])+\s*$/, '').replace(/^\s*(?:[-–—:|,]\s*)+/, '');
   t = t.replace(/\s{2,}/g, ' ').trim();
   return t || original; // jeśli wyczyściliśmy wszystko, zostaw oryginał do ręcznej poprawki
