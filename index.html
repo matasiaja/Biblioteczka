@@ -733,16 +733,23 @@ const DECOR_CHARS_RE = /[★☆●○◆◇■□▲▼✦✧♦♥~_*]+/g;
 // albo samą listę nazwisk na końcu tytułu — to nie jest część tytułu, więc wycinamy.
 const CAST_KEYWORD_RE = /\b(starring|feat\.?|featuring|with)\s+.+$/i;
 const TRAILING_NAME_LIST_RE = /(?:\s*[-–—:|,]\s*[A-Z][a-zà-ž'.]+(?:\s+[A-Z][a-zà-ž'.]+){1,3}){2,}\s*$/;
+// Katalogowy numer sprzedawcy na początku ("29063 - ...") i kody magazynowe typu
+// "D0286" (litery zrośnięte z cyframi) — częste w feedach resellerów z UPCitemdb.
+const LEADING_CATALOG_NUM_RE = /^\s*\d{3,7}\s*[-:–—]\s*/;
+const SKU_CODE_RE = /\b[A-Za-z]{1,4}\d{3,}\b|\b\d{3,}[A-Za-z]{1,4}\b/g;
 
 function cleanListingTitle(text){
   const original = (text || '').trim();
   let t = original;
   t = t.split(' | ')[0]; // wiele ogłoszeń ma format "Tytuł | Format | Free Shipping | ..."
+  t = t.replace(LEADING_CATALOG_NUM_RE, ' ');
   t = t.replace(/[\[(][^\])]*[\])]/g, ' '); // usuń nawiasy z dopiskami
   t = t.replace(DECOR_CHARS_RE, ' ');
   t = t.replace(CODE_LABEL_RE, ' ');
+  t = t.replace(SKU_CODE_RE, ' ');
   t = t.replace(BARE_CODE_RE, ' ');
   for (const re of LISTING_NOISE) t = t.replace(re, ' ');
+  t = t.replace(/\b(19|20)\d{2}\b/g, ' '); // rok wyciągany jest osobno do pola "year" — w tytule tylko zaśmieca, i przeszkadza w rozpoznaniu końcówki z obsadą
   t = t.replace(CAST_KEYWORD_RE, ' ');
   t = t.replace(TRAILING_NAME_LIST_RE, ' ');
   t = t.replace(/(?:\s*[-–—:|,])+\s*$/, '').replace(/^\s*(?:[-–—:|,]\s*)+/, '');
@@ -851,14 +858,12 @@ async function lookupBarcodeGeneral(code){
   return { type: 'movie', title: '', creator: '', format: '', year: '', cover_url: '' };
 }
 
-async function lookupMovieDetails(title){
-  if (!title) return null;
+async function tryOmdbTitle(title){
   try {
     const res = await fetch(`${FUNCTIONS_BASE}/omdb?t=${encodeURIComponent(title)}&type=movie`);
     const data = await res.json();
     if (data.Response === 'True'){
-      logStep('OMDb', 'znaleziono');
-      toast('Znaleziono reżysera, rok premiery i plakat (OMDb)');
+      logStep('OMDb', 'znaleziono ("' + title + '")');
       return {
         title: data.Title || title,
         creator: data.Director && data.Director !== 'N/A' ? data.Director : '',
@@ -868,15 +873,17 @@ async function lookupMovieDetails(title){
     }
     logStep('OMDb', 'nie znaleziono po tytule "' + title + '"');
   } catch(e){ logStep('OMDb', 'błąd sieci'); }
-  // Zapasowo TMDb — czasem trafia tam, gdzie OMDb nie (i ma polskie tytuły)
+  return null;
+}
+
+async function tryTmdbTitle(title){
   try {
     const results = await searchTmdbTitles(title);
     const r = results && results[0];
     if (r){
       const detail = await fetch(`${FUNCTIONS_BASE}/tmdb?i=${encodeURIComponent(r.id)}`).then(x => x.json()).catch(() => null);
       const director = detail && detail.credits && detail.credits.crew ? detail.credits.crew.find(c => c.job === 'Director') : null;
-      logStep('TMDb', 'znaleziono');
-      toast('Znaleziono dane filmu (TMDb)');
+      logStep('TMDb', 'znaleziono ("' + title + '")');
       return {
         title: (detail && detail.title) || r.title || title,
         creator: director ? director.name : '',
@@ -886,6 +893,40 @@ async function lookupMovieDetails(title){
     }
     logStep('TMDb', 'nie znaleziono po tytule "' + title + '"');
   } catch(e){ logStep('TMDb', 'błąd sieci'); }
+  return null;
+}
+
+// Niektóre ogłoszenia z UPCitemdb doklejają na początku tytułu imię i nazwisko aktora
+// (np. "Tom Cruise The Last Samurai") zamiast na końcu — regexy tego nie rozdzielą
+// bez wiedzy, gdzie kończy się nazwisko, więc próbujemy dopasować tytuł też bez
+// pierwszych 2-3 słów, jeśli wyglądają jak imię i nazwisko (same wielkie litery).
+function buildTitleCandidates(title){
+  const candidates = [title];
+  const words = title.split(/\s+/).filter(Boolean);
+  [2, 3].forEach(dropCount => {
+    if (words.length > dropCount + 1){
+      const leading = words.slice(0, dropCount);
+      if (leading.every(w => /^[A-ZÀ-Ž][a-zà-ž'.-]+$/.test(w))){
+        const stripped = words.slice(dropCount).join(' ');
+        if (stripped && !candidates.includes(stripped)) candidates.push(stripped);
+      }
+    }
+  });
+  return candidates;
+}
+
+async function lookupMovieDetails(title){
+  if (!title) return null;
+  const candidates = buildTitleCandidates(title);
+  for (const candidate of candidates){
+    const omdb = await tryOmdbTitle(candidate);
+    if (omdb){ toast('Znaleziono reżysera, rok premiery i plakat (OMDb)'); return omdb; }
+  }
+  // Zapasowo TMDb — czasem trafia tam, gdzie OMDb nie (i ma polskie tytuły)
+  for (const candidate of candidates){
+    const tmdb = await tryTmdbTitle(candidate);
+    if (tmdb){ toast('Znaleziono dane filmu (TMDb)'); return tmdb; }
+  }
   return null;
 }
 
