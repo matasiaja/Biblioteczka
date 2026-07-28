@@ -2233,8 +2233,9 @@ function renderSettings(main){
     </div>
     <div class="card">
       <div class="section-title">Kopia zapasowa</div>
-      <div class="meta" style="margin-bottom:10px;">Pobierz całą kolekcję i historię wypożyczeń jako plik JSON.</div>
+      <div class="meta" style="margin-bottom:10px;">Pobierz całą kolekcję i historię wypożyczeń jako plik JSON, albo samą kolekcję jako arkusz CSV.</div>
       <button class="btn secondary" onclick="exportBackup()">Eksportuj kolekcję (JSON)</button>
+      <button class="btn secondary" style="margin-top:8px;" onclick="exportCsv()">Eksportuj kolekcję (CSV)</button>
     </div>
   `;
 }
@@ -2344,6 +2345,37 @@ function exportBackup(){
   URL.revokeObjectURL(url);
   toast('Pobrano kopię zapasową');
 }
+
+function csvEscape(v){
+  const s = v === null || v === undefined ? '' : String(v);
+  return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+}
+
+function exportCsv(){
+  const cols = ['title','type','creator','publisher','format','year','barcode','index_number','rating','status','watched','notes','personal_notes','created_at'];
+  const header = ['Tytuł','Rodzaj','Autor/Reżyser/Artysta','Wydawnictwo','Format','Rok','Kod kreskowy','Indeks','Ocena','Status','Obejrzane','Opis','Notatki','Data dodania'];
+  const cellValue = (item, col) => {
+    if (col === 'type') return TYPE_LABELS[item.type] || item.type;
+    if (col === 'watched') return item.watched ? 'tak' : 'nie';
+    if (col === 'status') return item.status === 'wishlist' ? 'lista życzeń' : 'kolekcja';
+    return item[col];
+  };
+  const lines = [header.join(',')];
+  state.items.forEach(item => {
+    lines.push(cols.map(c => csvEscape(cellValue(item, c))).join(','));
+  });
+  const blob = new Blob(['\uFEFF' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `biblioteczka-eksport-${todayIso()}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+  toast('Pobrano eksport CSV');
+}
+
 
 document.addEventListener('DOMContentLoaded', boot);
 
