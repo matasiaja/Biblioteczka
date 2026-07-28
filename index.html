@@ -151,7 +151,11 @@ let state = {
   loanHistoryLoading: false,
   batchScanMode: localStorage.getItem('bib_batch_scan') === '1',
   listView: localStorage.getItem('bib_list_view') || 'owned',
-  addTarget: 'owned'
+  addTarget: 'owned',
+  brokenCoversChecking: false,
+  brokenCoversProgress: 0,
+  brokenCoversTotal: 0,
+  brokenCoverIds: null
 };
 
 const app = document.getElementById('app');
@@ -1280,12 +1284,21 @@ function starsHtml(rating){
   return '★'.repeat(n) + '☆'.repeat(5-n);
 }
 
+function coverPlaceholderHtml(type){
+  const square = type === 'music';
+  return `<div class="cover grid-placeholder${square ? ' square' : ''}" style="display:flex;align-items:center;justify-content:center;color:var(--text-dim);">${icon(type)}</div>`;
+}
+
 function coverImg(url, size, type){
   if (!url) return '';
   const square = type === 'music';
   const cls = square ? 'cover square' : 'cover';
   const style = size ? `width:${size}px;height:${square ? size : Math.round(size*1.36)}px;` : '';
-  return `<img src="${escapeHtml(url)}" alt="" class="${cls}" style="${style}" onerror="this.style.display='none'">`;
+  // onerror atrybut jest w cudzysłowach ("..."), więc cudzysłowy z fallbackHtml kodujemy jako
+  // &quot; (przeglądarka zdekoduje je z powrotem na " zanim wykona JS) — a sam string JS
+  // budujemy w apostrofach, żeby zdekodowane " nie przerywały mu przedwcześnie.
+  const fallback = coverPlaceholderHtml(type).replace(/"/g, '&quot;');
+  return `<img src="${escapeHtml(url)}" alt="" class="${cls}" style="${style}" onerror="this.outerHTML='${fallback}'">`;
 }
 
 function cancelAdd(){
@@ -2137,11 +2150,80 @@ function renderSettings(main){
       ${notificationStatusHtml()}
     </div>
     <div class="card">
+      <div class="section-title">Zepsute okładki</div>
+      <div class="meta" style="margin-bottom:10px;">Niektóre pozycje mają zapisany link do zdjęcia, który już nie działa (np. martwy link ze skanu kodu) — dzięki temu nie pojawiają się w filtrze "Brak: Zdjęcie". Sprawdź, które linki faktycznie nie ładują się, i wyczyść je.</div>
+      ${renderBrokenCoversStatus()}
+    </div>
+    <div class="card">
       <div class="section-title">Kopia zapasowa</div>
       <div class="meta" style="margin-bottom:10px;">Pobierz całą kolekcję i historię wypożyczeń jako plik JSON.</div>
       <button class="btn secondary" onclick="exportBackup()">Eksportuj kolekcję (JSON)</button>
     </div>
   `;
+}
+
+function renderBrokenCoversStatus(){
+  if (state.brokenCoversChecking){
+    return `<div class="meta">Sprawdzam ${state.brokenCoversProgress||0} / ${state.brokenCoversTotal||0}…</div>`;
+  }
+  if (state.brokenCoverIds){
+    if (state.brokenCoverIds.length === 0){
+      return `<div class="meta" style="color:var(--ok);">Wszystkie okładki działają ✓</div>`;
+    }
+    return `
+      <div class="meta" style="color:var(--warn);margin-bottom:10px;">Znaleziono zepsutych okładek: ${state.brokenCoverIds.length}</div>
+      <button class="btn danger" onclick="clearBrokenCovers()">Wyczyść zepsute okładki (${state.brokenCoverIds.length})</button>
+      <button class="btn small secondary" style="margin-top:8px;" onclick="checkBrokenCovers()">Sprawdź ponownie</button>
+    `;
+  }
+  return `<button class="btn secondary" onclick="checkBrokenCovers()">Sprawdź okładki</button>`;
+}
+
+async function checkBrokenCovers(){
+  const items = state.items.filter(i => i.cover_url);
+  state.brokenCoversChecking = true;
+  state.brokenCoversProgress = 0;
+  state.brokenCoversTotal = items.length;
+  state.brokenCoverIds = null;
+  renderTab();
+  const broken = [];
+  const CONCURRENCY = 8;
+  let idx = 0;
+  async function worker(){
+    while (idx < items.length){
+      const item = items[idx++];
+      const ok = await testImageLoads(item.cover_url);
+      if (!ok) broken.push(item.id);
+      state.brokenCoversProgress++;
+      if (state.brokenCoversProgress % 5 === 0 || state.brokenCoversProgress === items.length) renderTab();
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(CONCURRENCY, items.length) }, worker));
+  state.brokenCoversChecking = false;
+  state.brokenCoverIds = broken;
+  renderTab();
+}
+
+function testImageLoads(url){
+  return new Promise(resolve => {
+    const img = new Image();
+    const timer = setTimeout(() => resolve(false), 10000);
+    img.onload = () => { clearTimeout(timer); resolve(true); };
+    img.onerror = () => { clearTimeout(timer); resolve(false); };
+    img.src = url;
+  });
+}
+
+async function clearBrokenCovers(){
+  const ids = state.brokenCoverIds || [];
+  if (ids.length === 0) return;
+  if (!confirm(`Wyczyścić zapisany link do zdjęcia dla ${ids.length} pozycji? Będzie je można potem uzupełnić ponownie.`)) return;
+  const { error } = await sb.from('items').update({ cover_url: null }).in('id', ids);
+  if (error){ toast('Błąd: ' + error.message); return; }
+  await loadAll();
+  state.brokenCoverIds = null;
+  toast(`Wyczyszczono ${ids.length} zepsutych okładek`);
+  renderTab();
 }
 
 function notificationStatusHtml(){
