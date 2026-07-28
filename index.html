@@ -156,6 +156,26 @@ let state = {
 
 const app = document.getElementById('app');
 
+// ---------------- SZKIC FORMULARZA DODAWANIA/EDYCJI (przetrwa zabicie karty przez przeglądarkę) ----------------
+// Telefony (zwł. iOS) potrafią w pełni ubić uśpioną kartę, żeby odzyskać pamięć — zwykły stan w JS
+// wtedy znika bez śladu, nawet jeśli nic nie odświeżało widoku. Trzymamy więc bieżący szkic też
+// w localStorage i wczytujemy go z powrotem przy starcie, żeby "wróć do karty" nie kasowało wpisanych danych.
+function setLookup(value){
+  state.lookup = value;
+  if (value) localStorage.setItem('bib_draft', JSON.stringify(value));
+  else localStorage.removeItem('bib_draft');
+}
+
+function saveDraft(){
+  if (state.lookup) localStorage.setItem('bib_draft', JSON.stringify(state.lookup));
+}
+
+function syncDraftField(field, value){
+  if (!state.lookup) return;
+  state.lookup[field] = value;
+  saveDraft();
+}
+
 // ---------------- NAWIGACJA: fizyczny/systemowy przycisk "Wstecz" ----------------
 // Ta sama logika co w Spotigraj: zakładka 'scan' jest korzeniem — Back z niej zamyka appkę.
 // Pozostałe zakładki są jej dziećmi (replaceState — Back z każdej z nich wraca do 'scan',
@@ -174,7 +194,7 @@ function ensureNavFoundation(){
 window.addEventListener('popstate', function(){
   if (!session) return;
   if (state.lookup){
-    state.lookup = null;
+    setLookup(null);
     state.openItemId = null;
     renderTab();
     return;
@@ -246,9 +266,28 @@ async function boot(){
   const { data } = await sb.auth.getSession();
   session = data.session;
   sb.auth.onAuthStateChange((_e, s)=>{ session = s; render(); if (session) ensureNavFoundation(); });
-  if (session){ await loadAll(); maybeNotifyLoanAlerts(); }
+  if (session){
+    await loadAll();
+    maybeNotifyLoanAlerts();
+    restoreDraft();
+  }
   render();
   if (session) ensureNavFoundation();
+}
+
+function restoreDraft(){
+  const raw = localStorage.getItem('bib_draft');
+  if (!raw) return;
+  try {
+    const draft = JSON.parse(raw);
+    if (draft && typeof draft === 'object'){
+      state.lookup = draft;
+      state.tab = 'scan';
+      localStorage.setItem('bib_tab', 'scan');
+      window.history.replaceState(draft.editingId ? { form: 'edit', id: draft.editingId } : { form: 'new' }, '');
+      toast('Przywrócono niezapisany szkic pozycji');
+    }
+  } catch(e){ localStorage.removeItem('bib_draft'); }
 }
 
 function renderNotConfigured(){
@@ -366,7 +405,7 @@ async function setTab(tab){
   state.tab = tab;
   state.scannedBarcode = null;
   state.scannedItem = null;
-  state.lookup = null;
+  setLookup(null);
   state.loanScanning = false;
   state.selectMode = false;
   state.selectedIds = [];
@@ -518,7 +557,7 @@ function manualBarcode(){
 }
 
 function skipBarcode(){
-  state.lookup = { barcode: null, type: 'book', title: '', creator: '', publisher: '', format: '', year: '', cover_url: '', status: state.addTarget };
+  setLookup({ barcode: null, type: 'book', title: '', creator: '', publisher: '', format: '', year: '', cover_url: '', status: state.addTarget });
   window.history.pushState({ form: 'new' }, '');
   render();
 }
@@ -564,7 +603,7 @@ async function onBarcode(code){
   } else {
     guess = await lookupBarcodeGeneral(code) || guess;
   }
-  state.lookup = { barcode: code, ...guess, status: state.addTarget, debugLog: lookupLog, checksumOk: isValidBarcodeChecksum(code) };
+  setLookup({ barcode: code, ...guess, status: state.addTarget, debugLog: lookupLog, checksumOk: isValidBarcodeChecksum(code) });
   window.history.pushState({ form: 'new' }, '');
   render();
 }
@@ -956,7 +995,7 @@ function renderAddForm(main){
     ${dup ? `
       <div class="card" style="background:rgba(255,176,32,.1);border:1px solid var(--warn);margin-bottom:12px;padding:12px;">
         <div style="color:var(--warn);font-size:13px;margin-bottom:8px;">⚠ Masz już podobną pozycję w kolekcji: <strong>${escapeHtml(dup.title)}</strong>${dup.creator?' — '+escapeHtml(dup.creator):''}</div>
-        <button type="button" class="btn small secondary" onclick="state.lookup=null;openItem('${dup.id}')">Otwórz istniejącą pozycję</button>
+        <button type="button" class="btn small secondary" onclick="setLookup(null);openItem('${dup.id}')">Otwórz istniejącą pozycję</button>
       </div>
     ` : ''}
     <div class="card">
@@ -979,13 +1018,13 @@ function renderAddForm(main){
       ${(l.barcode || l.editingId || l.type === 'book') ? `
         <label>Kod kreskowy / ISBN${l.checksumOk === false ? ' <span style="color:var(--danger);">(niepoprawna suma kontrolna — błąd odczytu?)</span>' : ''}</label>
         <div class="row">
-          <input id="f-barcode" value="${escapeHtml(l.barcode||'')}" class="mono" placeholder="opcjonalnie — wpisz i wyszukaj">
+          <input id="f-barcode" value="${escapeHtml(l.barcode||'')}" class="mono" placeholder="opcjonalnie — wpisz i wyszukaj" oninput="syncDraftField('barcode', this.value)">
           ${l.editingId ? '' : `<button class="btn small secondary" style="flex:0 0 auto;" onclick="recheckBarcode()">Szukaj</button>`}
         </div>
       ` : ''}
       ${l.type === 'book' ? `
         <label>Indeks (numer katalogowy z okładki)</label>
-        <input id="f-index" value="${escapeHtml(l.index_number||'')}" placeholder="np. 12345 (opcjonalnie)">
+        <input id="f-index" value="${escapeHtml(l.index_number||'')}" placeholder="np. 12345 (opcjonalnie)" oninput="syncDraftField('index_number', this.value)">
       ` : ''}
       ${l.debugLog && l.debugLog.length ? `
         <details style="margin-bottom:12px;">
@@ -1005,27 +1044,27 @@ function renderAddForm(main){
       ${l.type === 'movie' ? renderTmdbSearchBox(l) : ''}
       ${l.type === 'music' ? renderMusicBrainzSearchBox(l) : ''}
       <label>Tytuł</label>
-      <input id="f-title" value="${escapeHtml(l.title)}" placeholder="Tytuł">
+      <input id="f-title" value="${escapeHtml(l.title)}" placeholder="Tytuł" oninput="syncDraftField('title', this.value)">
       <label id="f-creator-label">${CREATOR_LABELS[l.type]}</label>
-      <input id="f-creator" value="${escapeHtml(l.creator)}" placeholder="Kto stworzył">
+      <input id="f-creator" value="${escapeHtml(l.creator)}" placeholder="Kto stworzył" oninput="syncDraftField('creator', this.value)">
       ${l.type === 'book' ? `
         <label>Wydawnictwo</label>
-        <input id="f-publisher" value="${escapeHtml(l.publisher||'')}" placeholder="np. Znak, W.A.B., PWN">
+        <input id="f-publisher" value="${escapeHtml(l.publisher||'')}" placeholder="np. Znak, W.A.B., PWN" oninput="syncDraftField('publisher', this.value)">
       ` : ''}
       <label>Format</label>
-      <select id="f-format">
+      <select id="f-format" onchange="syncDraftField('format', this.value)">
         ${TYPE_FORMATS[l.type].map(f=>`<option value="${escapeHtml(f)}" ${l.format===f?'selected':''}>${escapeHtml(f)}</option>`).join('')}
       </select>
       <label id="f-year-label">${YEAR_LABELS[l.type]}</label>
-      <input id="f-year" value="${escapeHtml(l.year)}" placeholder="np. 2020" inputmode="numeric">
+      <input id="f-year" value="${escapeHtml(l.year)}" placeholder="np. 2020" inputmode="numeric" oninput="syncDraftField('year', this.value)">
       <label>Ocena</label>
       <div style="margin-bottom:14px;">
         ${[1,2,3,4,5].map(n=>`<button type="button" onclick="setRating(${n})" style="background:none;border:none;cursor:pointer;font-size:26px;line-height:1;padding:2px 3px;color:${(l.rating||0)>=n?'var(--warn)':'var(--border)'};">★</button>`).join('')}
       </div>
       <label>Notatki</label>
-      <textarea id="f-notes" placeholder="Twoje notatki o tej pozycji (opcjonalnie)" rows="3" style="margin-bottom:14px;">${escapeHtml(l.notes||'')}</textarea>
+      <textarea id="f-notes" placeholder="Twoje notatki o tej pozycji (opcjonalnie)" rows="3" style="margin-bottom:14px;" oninput="syncDraftField('notes', this.value)">${escapeHtml(l.notes||'')}</textarea>
       <label style="display:flex;align-items:center;gap:8px;margin-bottom:14px;cursor:pointer;">
-        <input type="checkbox" id="f-wishlist" style="width:18px;height:18px;margin:0;" ${l.status==='wishlist'?'checked':''}>
+        <input type="checkbox" id="f-wishlist" style="width:18px;height:18px;margin:0;" ${l.status==='wishlist'?'checked':''} onchange="syncDraftField('status', this.checked ? 'wishlist' : 'owned')">
         <span>Lista życzeń (jeszcze tego nie mam, chcę kupić)</span>
       </label>
       <button class="btn" onclick="saveItem()">${l.editingId ? 'Zapisz zmiany' : 'Zapisz do kolekcji'}</button>
@@ -1087,6 +1126,7 @@ async function selectOmdbMovie(imdbID){
     state.lookup.creator = data.Director && data.Director !== 'N/A' ? data.Director : state.lookup.creator;
     state.lookup.year = data.Year ? (data.Year.match(/\d{4}/)||[])[0]||'' : state.lookup.year;
     state.lookup.cover_url = data.Poster && data.Poster !== 'N/A' ? data.Poster : state.lookup.cover_url;
+    saveDraft();
     toast('Uzupełniono z OMDb: ' + data.Title);
     render();
   } catch(e){ toast('Błąd połączenia z OMDb'); }
@@ -1146,6 +1186,7 @@ async function selectTmdbMovie(id){
     state.lookup.creator = director ? director.name : state.lookup.creator;
     state.lookup.year = data.release_date ? data.release_date.slice(0,4) : state.lookup.year;
     state.lookup.cover_url = data.poster_path ? `https://image.tmdb.org/t/p/w342${data.poster_path}` : state.lookup.cover_url;
+    saveDraft();
     toast('Uzupełniono z TMDb: ' + data.title);
     render();
   } catch(e){ toast('Błąd połączenia z TMDb'); }
@@ -1204,6 +1245,7 @@ function selectMusicBrainzRelease(mbid){
       state.lookup.year = r.date ? (r.date.match(/\d{4}/)||[])[0]||state.lookup.year : state.lookup.year;
       state.lookup.format = detectMusicFormatFromMedia(r.media && r.media[0]) || state.lookup.format;
       state.lookup.cover_url = `https://coverartarchive.org/release/${mbid}/front-250`;
+      saveDraft();
       toast('Uzupełniono z MusicBrainz: ' + (r.title||''));
       render();
     })
@@ -1216,6 +1258,7 @@ function onTypeChange(){
   state.lookup.creator = document.getElementById('f-creator').value;
   state.lookup.format = '';
   state.lookup.year = document.getElementById('f-year').value;
+  saveDraft();
   render();
 }
 
@@ -1228,6 +1271,7 @@ function setRating(n){
   const notesEl = document.getElementById('f-notes');
   if (notesEl) l.notes = notesEl.value;
   l.rating = l.rating === n ? null : n;
+  saveDraft();
   render();
 }
 
@@ -1245,12 +1289,13 @@ function coverImg(url, size, type){
 }
 
 function cancelAdd(){
-  state.lookup = null;
+  setLookup(null);
   render();
 }
 
 function removeCoverPreview(){
   state.lookup.cover_url = '';
+  saveDraft();
   toast('Usunięto okładkę');
   render();
 }
@@ -1271,6 +1316,7 @@ async function uploadCoverFile(){
   }
   const { data } = sb.storage.from('covers').getPublicUrl(path);
   state.lookup.cover_url = data.publicUrl;
+  saveDraft();
   toast('Wgrano okładkę');
   render();
 }
@@ -1282,6 +1328,7 @@ function setManualCoverUrl(){
   const testImg = new Image();
   testImg.onload = () => {
     state.lookup.cover_url = url;
+    saveDraft();
     toast('Ustawiono okładkę');
     render();
   };
@@ -1327,7 +1374,7 @@ async function saveItem(){
     );
     if (dup){
       toast(`"${dup.title}" już masz w kolekcji 📚 — otwieram tę pozycję`);
-      state.lookup = null;
+      setLookup(null);
       render();
       openItem(dup.id);
       return;
@@ -1339,7 +1386,7 @@ async function saveItem(){
   if (error){ toast('Błąd zapisu: ' + error.message); return; }
   await loadAll();
   const wasEditing = l.editingId;
-  state.lookup = null;
+  setLookup(null);
   toast(wasEditing ? 'Zapisano zmiany' : 'Dodano do kolekcji');
   render();
   if (!wasEditing && state.batchScanMode && state.tab === 'scan') beginScan();
@@ -1776,7 +1823,7 @@ async function deleteItem(itemId){
   const { error } = await sb.from('items').delete().eq('id', itemId);
   if (error){ toast('Błąd: ' + error.message); return; }
   await loadAll();
-  state.lookup = null;
+  setLookup(null);
   toast('Usunięto');
   renderTab();
 }
@@ -1784,7 +1831,7 @@ async function deleteItem(itemId){
 function editItem(id){
   const item = state.items.find(i => i.id === id);
   if (!item) return;
-  state.lookup = {
+  const lookupValue = {
     editingId: item.id,
     barcode: item.barcode || null,
     type: item.type,
@@ -1801,6 +1848,7 @@ function editItem(id){
     checksumOk: item.barcode ? isValidBarcodeChecksum(item.barcode) : true,
     debugLog: []
   };
+  setLookup(lookupValue);
   window.history.pushState({ form: 'edit', id }, '');
   render();
 }
