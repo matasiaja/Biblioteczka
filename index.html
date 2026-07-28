@@ -145,6 +145,7 @@ let state = {
   searchMode: false,
   searchQuery: '',
   dismissedLoanAlert: false,
+  loanAlertBannerEnabled: localStorage.getItem('bib_loan_alert_banner') === '1',
   showLoanHistory: false,
   loanHistory: null,
   loanHistoryLoading: false,
@@ -310,11 +311,17 @@ function dismissLoanAlert(){
   render();
 }
 
+function toggleLoanAlertBanner(on){
+  state.loanAlertBannerEnabled = on;
+  localStorage.setItem('bib_loan_alert_banner', on ? '1' : '0');
+  render();
+}
+
 // ---------------- RENDER SHELL ----------------
 function render(){
   if (!session){ renderLogin(); return; }
   const { overdue, dueSoon } = getLoanAlerts();
-  const showAlert = !state.dismissedLoanAlert && state.tab !== 'loans' && (overdue.length || dueSoon.length);
+  const showAlert = state.loanAlertBannerEnabled && !state.dismissedLoanAlert && state.tab !== 'loans' && (overdue.length || dueSoon.length);
   app.innerHTML = `
     <header class="topbar">
       <div style="display:flex;align-items:center;gap:10px;">
@@ -2074,6 +2081,10 @@ function renderSettings(main){
     ` : ''}
     <div class="card">
       <div class="section-title">Powiadomienia</div>
+      <label style="display:flex;align-items:center;gap:8px;margin-bottom:10px;cursor:pointer;">
+        <input type="checkbox" style="width:18px;height:18px;margin:0;" ${state.loanAlertBannerEnabled?'checked':''} onchange="toggleLoanAlertBanner(this.checked)">
+        <span class="meta">Pokazuj baner o przeterminowanych / zbliżających się terminach zwrotu w appce</span>
+      </label>
       <div class="meta" style="margin-bottom:10px;">Przypomnienie o zbliżającym się lub przekroczonym terminie zwrotu, gdy otwierasz appkę.</div>
       ${notificationStatusHtml()}
     </div>
