@@ -306,7 +306,18 @@ async function bootPublicShare(token){
   renderPublicShareView(data);
 }
 
+const PUBLIC_SORT_OPTIONS = [
+  ['title', 'Tytuł / album'],
+  ['creator', 'Artysta / autor / reżyser'],
+  ['format', 'Format'],
+  ['year', 'Rok']
+];
+
+let publicShareItems = [];
+let publicViewState = { typeFilter: 'all', sortBy: 'title', sortDir: 'asc', query: '' };
+
 function renderPublicShareView(items){
+  publicShareItems = items;
   app.innerHTML = `
     <header class="topbar">
       <div style="display:flex;align-items:center;gap:10px;">
@@ -315,17 +326,72 @@ function renderPublicShareView(items){
       </div>
     </header>
     <main style="padding:16px;">
-      <input id="public-search" placeholder="Szukaj w kolekcji…" style="margin-bottom:14px;" oninput="filterPublicShareView()">
-      <div class="grid" id="public-grid">
-        ${items.map(i => publicGridItemHtml(i)).join('')}
+      <input id="public-search" placeholder="Szukaj w kolekcji…" style="margin-bottom:14px;" oninput="setPublicQuery(this.value)">
+      <div class="tabs" id="public-type-tabs" style="margin-bottom:14px;"></div>
+      <div class="row" style="margin-bottom:14px;">
+        <select id="public-sort" onchange="setPublicSort(this.value)" style="margin-bottom:0;"></select>
+        <button type="button" class="btn small secondary" style="flex:0 0 auto;" onclick="togglePublicSortDir()" id="public-sort-dir"></button>
       </div>
+      <div class="grid" id="public-grid"></div>
     </main>
   `;
-  window.__publicShareItems = items;
+  renderPublicGrid();
+}
+
+function setPublicQuery(v){
+  publicViewState.query = v;
+  renderPublicGrid(true);
+}
+
+function setPublicTypeFilter(t){
+  publicViewState.typeFilter = t;
+  renderPublicGrid();
+}
+
+function setPublicSort(v){
+  publicViewState.sortBy = v;
+  renderPublicGrid();
+}
+
+function togglePublicSortDir(){
+  publicViewState.sortDir = publicViewState.sortDir === 'desc' ? 'asc' : 'desc';
+  renderPublicGrid();
+}
+
+function renderPublicGrid(queryOnly){
+  const counts = {
+    all: publicShareItems.length,
+    book: publicShareItems.filter(i=>i.type==='book').length,
+    movie: publicShareItems.filter(i=>i.type==='movie').length,
+    music: publicShareItems.filter(i=>i.type==='music').length
+  };
+  if (!queryOnly){
+    document.getElementById('public-type-tabs').innerHTML = ['all','book','movie','music'].map(t=>
+      `<button class="${publicViewState.typeFilter===t?'active':''}" onclick="setPublicTypeFilter('${t}')">${t==='all'?'Wszystko':TYPE_LABELS[t]} (${counts[t]})</button>`
+    ).join('');
+    document.getElementById('public-sort').innerHTML = PUBLIC_SORT_OPTIONS.map(([v,label])=>
+      `<option value="${v}" ${publicViewState.sortBy===v?'selected':''}>Sortuj: ${label}</option>`
+    ).join('');
+    const dirBtn = document.getElementById('public-sort-dir');
+    const numeric = publicViewState.sortBy === 'year';
+    dirBtn.textContent = publicViewState.sortDir==='desc' ? (numeric?'↓ malejąco':'Z-A ↓') : (numeric?'↑ rosnąco':'A-Z ↑');
+  }
+  const q = publicViewState.query.trim().toLowerCase();
+  let filtered = publicViewState.typeFilter==='all' ? publicShareItems : publicShareItems.filter(i=>i.type===publicViewState.typeFilter);
+  if (q) filtered = filtered.filter(i => (i.title||'').toLowerCase().includes(q) || (i.creator||'').toLowerCase().includes(q));
+  const dir = publicViewState.sortDir === 'desc' ? -1 : 1;
+  const collator = new Intl.Collator('pl', { sensitivity: 'base' });
+  filtered = [...filtered].sort((a,b) => {
+    if (publicViewState.sortBy === 'year') return dir * ((a.year||0) - (b.year||0));
+    return dir * collator.compare((a[publicViewState.sortBy]||'').toString(), (b[publicViewState.sortBy]||'').toString());
+  });
+  document.getElementById('public-grid').innerHTML = filtered.length===0
+    ? `<div class="empty" style="grid-column:1/-1;">Brak wyników.</div>`
+    : filtered.map(i => publicGridItemHtml(i)).join('');
 }
 
 function publicGridItemHtml(i){
-  return `<div class="grid-item-wrap" data-title="${escapeHtml((i.title||'').toLowerCase())}" data-creator="${escapeHtml((i.creator||'').toLowerCase())}">
+  return `<div class="grid-item-wrap">
     <div class="grid-item" onclick="openPublicItem('${i.id}')">
       ${i.cover_url ? coverImg(i.cover_url, null, i.type) : `<div class="grid-placeholder${i.type==='music'?' square':''}">${icon(i.type)}</div>`}
       <div class="name">${escapeHtml(i.title)}${i.watched?' ✓':''}</div>
@@ -333,16 +399,8 @@ function publicGridItemHtml(i){
   </div>`;
 }
 
-function filterPublicShareView(){
-  const q = document.getElementById('public-search').value.trim().toLowerCase();
-  document.querySelectorAll('#public-grid .grid-item-wrap').forEach(el => {
-    const match = !q || el.dataset.title.includes(q) || el.dataset.creator.includes(q);
-    el.style.display = match ? '' : 'none';
-  });
-}
-
 function openPublicItem(id){
-  const item = (window.__publicShareItems||[]).find(i=>i.id===id);
+  const item = publicShareItems.find(i=>i.id===id);
   if (!item) return;
   const overlay = document.createElement('div');
   overlay.id = 'public-item-overlay';
