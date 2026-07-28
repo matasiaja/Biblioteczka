@@ -160,7 +160,8 @@ let state = {
   brokenCoverIds: null,
   loanBatchScanMode: localStorage.getItem('bib_loan_batch_scan') === '1',
   appSettings: null,
-  appSettingsLoading: false
+  appSettingsLoading: false,
+  visibleIds: []
 };
 
 const app = document.getElementById('app');
@@ -1162,6 +1163,10 @@ function renderAddForm(main){
         <input type="checkbox" id="f-wishlist" style="width:18px;height:18px;margin:0;" ${l.status==='wishlist'?'checked':''} onchange="syncDraftField('status', this.checked ? 'wishlist' : 'owned')">
         <span>Lista życzeń (jeszcze tego nie mam, chcę kupić)</span>
       </label>
+      <label style="display:flex;align-items:center;gap:8px;margin-bottom:14px;cursor:pointer;">
+        <input type="checkbox" id="f-watched" style="width:18px;height:18px;margin:0;" ${l.watched?'checked':''} onchange="syncDraftField('watched', this.checked)">
+        <span>${CONSUMED_LABELS[l.type]}</span>
+      </label>
       <button class="btn" onclick="saveItem()">${l.editingId ? 'Zapisz zmiany' : 'Zapisz do kolekcji'}</button>
       <button class="btn secondary" style="margin-top:8px;" onclick="cancelAdd()">Anuluj</button>
     </div>
@@ -1474,7 +1479,7 @@ async function saveItem(){
     personal_notes: (personalNotesEl ? personalNotesEl.value.trim() : '') || null,
     rating: l.rating || null,
     status: document.getElementById('f-wishlist').checked ? 'wishlist' : 'owned',
-    watched: l.watched || false
+    watched: document.getElementById('f-watched').checked
   };
   if (!l.editingId){
     const dup = state.items.find(i =>
@@ -1549,6 +1554,7 @@ function renderList(main){
       !(BOOK_ONLY_MISSING_FIELDS.includes(state.missingFilter) && i.type !== 'book') && isMissingField(i, state.missingFilter)
     );
   }
+  state.visibleIds = filtered.map(i=>i.id);
   const counts = {
     all: byStatus.length,
     book: byStatus.filter(i=>i.type==='book').length,
@@ -1568,8 +1574,10 @@ function renderList(main){
     </div>
     ${state.selectMode ? `
       <div class="card" style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px;padding:12px;flex-wrap:wrap;">
-        <span class="meta">Zaznaczono: ${state.selectedIds.length}</span>
+        <span class="meta">Zaznaczono: ${state.selectedIds.length} / ${state.visibleIds.length}</span>
         <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <button class="btn small secondary" onclick="selectAllVisible()">Zaznacz wszystko</button>
+          <button class="btn small secondary" onclick="deselectAll()">Odznacz wszystko</button>
           <button class="btn small secondary" onclick="cancelSelectMode()">Anuluj</button>
           ${state.listView==='owned' ? `<button class="btn small secondary" onclick="bulkSetWatched(true)" ${state.selectedIds.length===0?'disabled':''}>Oznacz: ${state.typeFilter!=='all' ? CONSUMED_LABELS[state.typeFilter] : 'Obejrzane'}</button>
           <button class="btn small secondary" onclick="bulkSetWatched(false)" ${state.selectedIds.length===0?'disabled':''}>Cofnij: ${state.typeFilter!=='all' ? CONSUMED_LABELS[state.typeFilter] : 'Obejrzane'}</button>` : ''}
@@ -1741,6 +1749,16 @@ function cancelSelectMode(){
   renderTab();
 }
 
+function selectAllVisible(){
+  state.selectedIds = [...state.visibleIds];
+  renderTab();
+}
+
+function deselectAll(){
+  state.selectedIds = [];
+  renderTab();
+}
+
 function toggleSelect(id){
   const idx = state.selectedIds.indexOf(id);
   if (idx === -1) state.selectedIds.push(id); else state.selectedIds.splice(idx, 1);
@@ -1859,7 +1877,8 @@ async function toggleWatched(itemId){
   if (error){ toast('Błąd: ' + error.message); return; }
   await loadAll();
   toast(!item.watched ? `Oznaczono: ${CONSUMED_LABELS[item.type]}` : `Cofnięto: ${TO_CONSUME_LABELS[item.type]}`);
-  openItem(itemId);
+  state.openItemId = null;
+  renderTab();
 }
 
 async function removeSavedCover(itemId){
