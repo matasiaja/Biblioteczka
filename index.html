@@ -1482,10 +1482,12 @@ function renderList(main){
       <button class="${state.listView==='wishlist'?'active':''}" onclick="setListView('wishlist')">Lista życzeń${wishlistCount?` (${wishlistCount})`:''}</button>
     </div>
     ${state.selectMode ? `
-      <div class="card" style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px;padding:12px;">
+      <div class="card" style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px;padding:12px;flex-wrap:wrap;">
         <span class="meta">Zaznaczono: ${state.selectedIds.length}</span>
-        <div style="display:flex;gap:8px;">
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
           <button class="btn small secondary" onclick="cancelSelectMode()">Anuluj</button>
+          ${state.listView==='owned' ? `<button class="btn small secondary" onclick="bulkSetWatched(true)" ${state.selectedIds.length===0?'disabled':''}>Oznacz: ${state.typeFilter!=='all' ? CONSUMED_LABELS[state.typeFilter] : 'Obejrzane'}</button>
+          <button class="btn small secondary" onclick="bulkSetWatched(false)" ${state.selectedIds.length===0?'disabled':''}>Cofnij: ${state.typeFilter!=='all' ? CONSUMED_LABELS[state.typeFilter] : 'Obejrzane'}</button>` : ''}
           <button class="btn small danger" onclick="bulkDeleteItems()" ${state.selectedIds.length===0?'disabled':''}>Usuń zaznaczone</button>
         </div>
       </div>
@@ -1667,6 +1669,17 @@ async function bulkDeleteItems(){
   if (error){ toast('Błąd: ' + error.message); return; }
   await loadAll();
   toast(`Usunięto ${state.selectedIds.length} pozycji`);
+  state.selectMode = false;
+  state.selectedIds = [];
+  renderTab();
+}
+
+async function bulkSetWatched(watched){
+  if (state.selectedIds.length === 0) return;
+  const { error } = await sb.from('items').update({ watched }).in('id', state.selectedIds);
+  if (error){ toast('Błąd: ' + error.message); return; }
+  await loadAll();
+  toast(watched ? `Oznaczono ${state.selectedIds.length} pozycji jako obejrzane` : `Cofnięto status obejrzane dla ${state.selectedIds.length} pozycji`);
   state.selectMode = false;
   state.selectedIds = [];
   renderTab();
