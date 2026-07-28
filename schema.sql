@@ -47,17 +47,62 @@ create index loans_active_idx on loans(item_id) where returned_at is null;
 -- tylko jedno aktywne wypożyczenie na przedmiot naraz
 create unique index loans_one_active_uidx on loans(item_id) where returned_at is null;
 
+-- Ustawienia appki (jeden wiersz) — m.in. publiczne udostępnianie kolekcji (tylko odczyt)
+create table app_settings (
+  id integer primary key default 1,
+  share_enabled boolean not null default false,
+  share_token uuid not null default gen_random_uuid(),
+  constraint app_settings_singleton check (id = 1)
+);
+insert into app_settings (id) values (1) on conflict (id) do nothing;
+
 -- ============================================
 -- RLS — dostęp tylko dla zalogowanych (Ty)
 -- ============================================
 alter table items enable row level security;
 alter table loans enable row level security;
+alter table app_settings enable row level security;
 
 create policy "auth_full_access" on items for all
   to authenticated using (true) with check (true);
 
 create policy "auth_full_access" on loans for all
   to authenticated using (true) with check (true);
+
+create policy "auth_full_access" on app_settings for all
+  to authenticated using (true) with check (true);
+
+-- Publiczny, tylko-do-odczytu dostęp do kolekcji przez link współdzielenia — bez tabel
+-- udostępnianych bezpośrednio anonimom: ta funkcja (SECURITY DEFINER) sama sprawdza,
+-- czy udostępnianie jest włączone i czy podany token się zgadza, zanim cokolwiek zwróci.
+create or replace function get_shared_collection(token uuid)
+returns table (
+  id uuid,
+  title text,
+  type text,
+  creator text,
+  format text,
+  year integer,
+  cover_url text,
+  notes text,
+  rating integer,
+  watched boolean
+)
+language sql
+security definer
+set search_path = public
+as $$
+  select i.id, i.title, i.type, i.creator, i.format, i.year, i.cover_url, i.notes, i.rating, i.watched
+  from items i
+  where i.status = 'owned'
+    and exists (
+      select 1 from app_settings s
+      where s.share_enabled = true and s.share_token = token
+    )
+  order by i.title;
+$$;
+
+grant execute on function get_shared_collection(uuid) to anon;
 
 -- ============================================
 -- Auto-update updated_at
@@ -102,3 +147,50 @@ create index if not exists items_watched_idx on items(watched);
 -- jeśli baza już istnieje — istniejąca kolumna `notes` zostaje jako "Opis")
 -- ============================================
 alter table items add column if not exists personal_notes text;
+
+-- ============================================
+-- MIGRACJA: publiczne udostępnianie kolekcji (uruchom ręcznie w SQL Editorze,
+-- jeśli baza już istnieje — patrz sekcje wyżej dla nowych instalacji)
+-- ============================================
+create table if not exists app_settings (
+  id integer primary key default 1,
+  share_enabled boolean not null default false,
+  share_token uuid not null default gen_random_uuid(),
+  constraint app_settings_singleton check (id = 1)
+);
+insert into app_settings (id) values (1) on conflict (id) do nothing;
+
+alter table app_settings enable row level security;
+
+drop policy if exists "auth_full_access" on app_settings;
+create policy "auth_full_access" on app_settings for all
+  to authenticated using (true) with check (true);
+
+create or replace function get_shared_collection(token uuid)
+returns table (
+  id uuid,
+  title text,
+  type text,
+  creator text,
+  format text,
+  year integer,
+  cover_url text,
+  notes text,
+  rating integer,
+  watched boolean
+)
+language sql
+security definer
+set search_path = public
+as $$
+  select i.id, i.title, i.type, i.creator, i.format, i.year, i.cover_url, i.notes, i.rating, i.watched
+  from items i
+  where i.status = 'owned'
+    and exists (
+      select 1 from app_settings s
+      where s.share_enabled = true and s.share_token = token
+    )
+  order by i.title;
+$$;
+
+grant execute on function get_shared_collection(uuid) to anon;

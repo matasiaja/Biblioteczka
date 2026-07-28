@@ -158,7 +158,9 @@ let state = {
   brokenCoversProgress: 0,
   brokenCoversTotal: 0,
   brokenCoverIds: null,
-  loanBatchScanMode: localStorage.getItem('bib_loan_batch_scan') === '1'
+  loanBatchScanMode: localStorage.getItem('bib_loan_batch_scan') === '1',
+  appSettings: null,
+  appSettingsLoading: false
 };
 
 const app = document.getElementById('app');
@@ -267,6 +269,11 @@ async function boot(){
     renderNotConfigured();
     return;
   }
+  const shareToken = new URLSearchParams(location.search).get('share');
+  if (shareToken){
+    await bootPublicShare(shareToken);
+    return;
+  }
   sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
     global: { fetch: (url, options) => fetch(url, { ...options, cache: 'no-store' }) }
   });
@@ -280,6 +287,78 @@ async function boot(){
   }
   render();
   if (session) ensureNavFoundation();
+}
+
+// ---------------- PUBLICZNY WIDOK UDOSTĘPNIONEJ KOLEKCJI (bez logowania) ----------------
+async function bootPublicShare(token){
+  const publicSb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  const { data, error } = await publicSb.rpc('get_shared_collection', { token });
+  if (error || !data){
+    app.innerHTML = `
+      <div style="max-width:360px;margin:80px auto;padding:0 20px;text-align:center;">
+        <img src="logo.svg" alt="Biblioteczka" style="width:64px;height:64px;border-radius:14px;margin-bottom:14px;">
+        <h1 style="margin-bottom:8px;">Biblioteczka</h1>
+        <p class="meta">Ten link do udostępnionej kolekcji jest nieprawidłowy albo wyłączony przez właściciela.</p>
+      </div>`;
+    return;
+  }
+  renderPublicShareView(data);
+}
+
+function renderPublicShareView(items){
+  app.innerHTML = `
+    <header class="topbar">
+      <div style="display:flex;align-items:center;gap:10px;">
+        <img src="logo.svg" alt="Biblioteczka" style="width:32px;height:32px;border-radius:8px;">
+        <div><h1>Biblioteczka</h1><div class="sub">Udostępniona kolekcja · tylko odczyt</div></div>
+      </div>
+    </header>
+    <main style="padding:16px;">
+      <input id="public-search" placeholder="Szukaj w kolekcji…" style="margin-bottom:14px;" oninput="filterPublicShareView()">
+      <div class="grid" id="public-grid">
+        ${items.map(i => publicGridItemHtml(i)).join('')}
+      </div>
+    </main>
+  `;
+  window.__publicShareItems = items;
+}
+
+function publicGridItemHtml(i){
+  return `<div class="grid-item-wrap" data-title="${escapeHtml((i.title||'').toLowerCase())}" data-creator="${escapeHtml((i.creator||'').toLowerCase())}">
+    <div class="grid-item" onclick="openPublicItem('${i.id}')">
+      ${i.cover_url ? coverImg(i.cover_url, null, i.type) : `<div class="grid-placeholder${i.type==='music'?' square':''}">${icon(i.type)}</div>`}
+      <div class="name">${escapeHtml(i.title)}${i.watched?' ✓':''}</div>
+    </div>
+  </div>`;
+}
+
+function filterPublicShareView(){
+  const q = document.getElementById('public-search').value.trim().toLowerCase();
+  document.querySelectorAll('#public-grid .grid-item-wrap').forEach(el => {
+    const match = !q || el.dataset.title.includes(q) || el.dataset.creator.includes(q);
+    el.style.display = match ? '' : 'none';
+  });
+}
+
+function openPublicItem(id){
+  const item = (window.__publicShareItems||[]).find(i=>i.id===id);
+  if (!item) return;
+  const overlay = document.createElement('div');
+  overlay.id = 'public-item-overlay';
+  overlay.style.cssText = 'position:fixed;inset:0;z-index:1000;background:rgba(0,0,0,0.85);display:flex;align-items:flex-start;justify-content:center;padding:20px;overflow-y:auto;cursor:pointer;';
+  overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
+  overlay.innerHTML = `
+    <div class="card" style="max-width:420px;width:100%;margin-top:40px;cursor:default;" onclick="event.stopPropagation();">
+      ${item.cover_url ? `<div style="text-align:center;margin-bottom:12px;">${coverImg(item.cover_url, 140, item.type)}</div>` : ''}
+      <div class="section-title">${TYPE_LABELS[item.type]}${item.watched ? ' · '+CONSUMED_LABELS[item.type] : ''}</div>
+      <h2 style="margin:0 0 4px;">${escapeHtml(item.title)}</h2>
+      <div class="meta mono" style="color:var(--text-dim);margin-bottom:14px;">${escapeHtml(item.creator||'—')}${item.format?' · '+escapeHtml(item.format):''}${item.year?' · '+item.year:''}</div>
+      ${item.rating ? `<div style="color:var(--warn);font-size:18px;margin-bottom:10px;">${starsHtml(item.rating)}</div>` : ''}
+      ${item.notes ? `<div class="meta" style="white-space:pre-wrap;">${escapeHtml(item.notes)}</div>` : ''}
+      <button class="btn secondary" style="margin-top:14px;" onclick="document.getElementById('public-item-overlay').remove()">Zamknij</button>
+    </div>
+  `;
+  document.body.appendChild(overlay);
 }
 
 function restoreDraft(){
@@ -2130,6 +2209,7 @@ async function onLoanBarcode(code){
 
 // ---------------- USTAWIENIA TAB ----------------
 function renderSettings(main){
+  if (state.appSettings === null && !state.appSettingsLoading) loadAppSettings();
   const owned = state.items.filter(i => (i.status||'owned') === 'owned');
   const wishlistCount = state.items.length - owned.length;
   const bookCount = owned.filter(i=>i.type==='book').length;
@@ -2248,7 +2328,63 @@ function renderSettings(main){
       <button class="btn secondary" onclick="exportBackup()">Eksportuj kolekcję (JSON)</button>
       <button class="btn secondary" style="margin-top:8px;" onclick="exportCsv()">Eksportuj kolekcję (CSV)</button>
     </div>
+    <div class="card">
+      <div class="section-title">Udostępnij kolekcję</div>
+      <div class="meta" style="margin-bottom:10px;">Publiczny link tylko do odczytu (bez logowania) — pokazuje tytuły, okładki, oceny i opisy pozycji z Twojej kolekcji. Bez kodów kreskowych, notatek prywatnych ani wypożyczeń.</div>
+      ${renderShareStatus()}
+    </div>
   `;
+}
+
+function renderShareStatus(){
+  if (state.appSettingsLoading || !state.appSettings) return `<div class="meta">Wczytywanie…</div>`;
+  const s = state.appSettings;
+  if (!s.share_enabled){
+    return `<button class="btn secondary" onclick="toggleSharing(true)">Włącz udostępnianie</button>`;
+  }
+  const link = `${location.origin}${location.pathname}?share=${s.share_token}`;
+  return `
+    <input id="share-link" value="${escapeHtml(link)}" readonly onclick="this.select()" style="margin-bottom:10px;">
+    <div class="row">
+      <button class="btn small secondary" onclick="copyShareLink()">Kopiuj link</button>
+      <button class="btn small secondary" onclick="regenerateShareLink()">Nowy link</button>
+      <button class="btn small danger" onclick="toggleSharing(false)">Wyłącz</button>
+    </div>
+  `;
+}
+
+async function loadAppSettings(){
+  state.appSettingsLoading = true;
+  const { data, error } = await sb.from('app_settings').select('*').eq('id', 1).maybeSingle();
+  state.appSettingsLoading = false;
+  if (error){ toast('Błąd wczytywania ustawień udostępniania: ' + error.message); return; }
+  state.appSettings = data || { id: 1, share_enabled: false, share_token: null };
+  renderTab();
+}
+
+async function toggleSharing(on){
+  const { data, error } = await sb.from('app_settings').update({ share_enabled: on }).eq('id', 1).select().maybeSingle();
+  if (error){ toast('Błąd: ' + error.message); return; }
+  state.appSettings = data;
+  toast(on ? 'Udostępnianie włączone' : 'Udostępnianie wyłączone');
+  renderTab();
+}
+
+async function regenerateShareLink(){
+  if (!confirm('Stary link przestanie działać. Wygenerować nowy?')) return;
+  const newToken = crypto.randomUUID();
+  const { data, error } = await sb.from('app_settings').update({ share_token: newToken }).eq('id', 1).select().maybeSingle();
+  if (error){ toast('Błąd: ' + error.message); return; }
+  state.appSettings = data;
+  toast('Wygenerowano nowy link');
+  renderTab();
+}
+
+function copyShareLink(){
+  const el = document.getElementById('share-link');
+  if (!el) return;
+  el.select();
+  navigator.clipboard?.writeText(el.value).then(() => toast('Skopiowano link')).catch(() => toast('Zaznaczono link — skopiuj ręcznie (Ctrl/Cmd+C)'));
 }
 
 function renderBrokenCoversStatus(){
