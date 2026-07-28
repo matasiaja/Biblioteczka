@@ -170,7 +170,8 @@ let state = {
   appSettings: null,
   appSettingsLoading: false,
   visibleIds: [],
-  loanQuickFilter: 'all'
+  loanQuickFilter: 'all',
+  cameFromStats: false
 };
 
 const app = document.getElementById('app');
@@ -566,6 +567,7 @@ async function setTab(tab){
   state.searchMode = false;
   state.searchQuery = '';
   state.loanQuickFilter = 'all';
+  state.cameFromStats = false;
   localStorage.setItem('bib_tab', tab);
   if (tab === 'list' || tab === 'loans'){
     await loadAll(); // odśwież — inne urządzenie (np. telefon) mogło coś dodać/zmienić
@@ -618,7 +620,12 @@ async function goToStat(kind){
     await setTab('loans');
     state.loanQuickFilter = kind === 'all_loans' ? 'all' : kind;
   }
+  state.cameFromStats = true;
   renderTab();
+}
+
+function backToStats(){
+  setTab('settings');
 }
 
 function renderTab(){
@@ -1673,6 +1680,7 @@ function renderList(main){
   };
   const wishlistCount = state.items.filter(i=>i.status==='wishlist').length;
   main.innerHTML = `
+    ${state.cameFromStats ? `<button class="link" style="margin-bottom:12px;" onclick="backToStats()">&larr; Wróć do statystyk</button>` : ''}
     <div class="row" style="margin-bottom:12px;">
       <button class="btn secondary" onclick="goAddNew('${state.listView}')">+ Dodaj pozycję</button>
       <button class="btn small secondary" style="flex:0 0 auto;" onclick="toggleViewMode()" title="${state.viewMode==='grid' ? 'Widok listy' : 'Widok siatki okładek'}">${state.viewMode==='grid' ? icon('list') : icon('grid')}</button>
@@ -2153,7 +2161,8 @@ function renderLoans(main){
     startScanner(onLoanBarcode);
     return;
   }
-  const scanBtn = `<button class="btn secondary" style="margin-bottom:12px;display:flex;align-items:center;justify-content:center;gap:8px;" onclick="startLoanScan()">${icon('scan')} Zeskanuj do zwrotu</button>`;
+  const backLink = state.cameFromStats ? `<button class="link" style="display:block;margin-bottom:12px;" onclick="backToStats()">&larr; Wróć do statystyk</button>` : '';
+  const scanBtn = `${backLink}<button class="btn secondary" style="margin-bottom:12px;display:flex;align-items:center;justify-content:center;gap:8px;" onclick="startLoanScan()">${icon('scan')} Zeskanuj do zwrotu</button>`;
 
   const loanTypeOf = l => (state.items.find(i=>i.id===l.item_id) || {}).type;
   const loanCounts = {
