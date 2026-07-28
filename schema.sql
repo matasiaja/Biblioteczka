@@ -16,7 +16,8 @@ create table items (
   format text,                -- np. papierowa/twarda, Blu-ray, DVD, CD, winyl
   year integer,
   cover_url text,
-  notes text,
+  notes text,             -- "Opis" w UI (opis pozycji, np. streszczenie/fabuła)
+  personal_notes text,     -- "Notatki" w UI (prywatne notatki użytkownika)
   rating integer check (rating between 1 and 5),
   status text not null default 'owned' check (status in ('owned','wishlist')), -- 'wishlist' = chcę kupić, jeszcze nie mam
   watched boolean not null default false, -- obejrzane/przeczytane/odsłuchane
@@ -95,3 +96,9 @@ create index if not exists items_status_idx on items(status);
 -- ============================================
 alter table items add column if not exists watched boolean not null default false;
 create index if not exists items_watched_idx on items(watched);
+
+-- ============================================
+-- MIGRACJA: osobne pole "Notatki" obok "Opisu" (uruchom ręcznie w SQL Editorze,
+-- jeśli baza już istnieje — istniejąca kolumna `notes` zostaje jako "Opis")
+-- ============================================
+alter table items add column if not exists personal_notes text;

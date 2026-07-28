@@ -1070,8 +1070,10 @@ function renderAddForm(main){
       <div style="margin-bottom:14px;">
         ${[1,2,3,4,5].map(n=>`<button type="button" onclick="setRating(${n})" style="background:none;border:none;cursor:pointer;font-size:26px;line-height:1;padding:2px 3px;color:${(l.rating||0)>=n?'var(--warn)':'var(--border)'};">★</button>`).join('')}
       </div>
+      <label>Opis</label>
+      <textarea id="f-notes" placeholder="Opis pozycji, np. streszczenie (opcjonalnie)" rows="3" style="margin-bottom:14px;" oninput="syncDraftField('notes', this.value)">${escapeHtml(l.notes||'')}</textarea>
       <label>Notatki</label>
-      <textarea id="f-notes" placeholder="Twoje notatki o tej pozycji (opcjonalnie)" rows="3" style="margin-bottom:14px;" oninput="syncDraftField('notes', this.value)">${escapeHtml(l.notes||'')}</textarea>
+      <textarea id="f-personal-notes" placeholder="Twoje prywatne notatki o tej pozycji (opcjonalnie)" rows="3" style="margin-bottom:14px;" oninput="syncDraftField('personal_notes', this.value)">${escapeHtml(l.personal_notes||'')}</textarea>
       <label style="display:flex;align-items:center;gap:8px;margin-bottom:14px;cursor:pointer;">
         <input type="checkbox" id="f-wishlist" style="width:18px;height:18px;margin:0;" ${l.status==='wishlist'?'checked':''} onchange="syncDraftField('status', this.checked ? 'wishlist' : 'owned')">
         <span>Lista życzeń (jeszcze tego nie mam, chcę kupić)</span>
@@ -1279,6 +1281,8 @@ function setRating(n){
   l.year = document.getElementById('f-year').value;
   const notesEl = document.getElementById('f-notes');
   if (notesEl) l.notes = notesEl.value;
+  const personalNotesEl = document.getElementById('f-personal-notes');
+  if (personalNotesEl) l.personal_notes = personalNotesEl.value;
   l.rating = l.rating === n ? null : n;
   saveDraft();
   render();
@@ -1371,6 +1375,7 @@ async function saveItem(){
   const indexEl = document.getElementById('f-index');
   const publisherEl = document.getElementById('f-publisher');
   const notesEl = document.getElementById('f-notes');
+  const personalNotesEl = document.getElementById('f-personal-notes');
   const payload = {
     barcode: (barcodeEl ? barcodeEl.value.trim() : l.barcode) || null,
     index_number: (indexEl ? indexEl.value.trim() : '') || null,
@@ -1382,6 +1387,7 @@ async function saveItem(){
     year: parseInt(document.getElementById('f-year').value) || null,
     cover_url: l.cover_url || null,
     notes: (notesEl ? notesEl.value.trim() : '') || null,
+    personal_notes: (personalNotesEl ? personalNotesEl.value.trim() : '') || null,
     rating: l.rating || null,
     status: document.getElementById('f-wishlist').checked ? 'wishlist' : 'owned',
     watched: l.watched || false
@@ -1422,7 +1428,8 @@ const MISSING_FIELDS = [
   ['publisher', 'Wydawnictwo'],
   ['index_number', 'Indeks'],
   ['rating', 'Ocena'],
-  ['notes', 'Notatki']
+  ['notes', 'Opis'],
+  ['personal_notes', 'Notatki']
 ];
 // Wydawnictwo i Indeks dotyczą tylko książek (formularz nie pokazuje ich dla filmów/muzyki),
 // więc dla innych typów każda pozycja "brakowałaby" tego pola — filtr pomija wtedy nie-książki.
@@ -1695,6 +1702,10 @@ function openItem(id){
       <div class="meta mono" style="color:var(--text-dim);margin-bottom:14px;">${escapeHtml(item.creator||'—')}${item.format?' · '+escapeHtml(item.format):''}${item.year?' · '+item.year:''}${item.publisher?' · '+escapeHtml(item.publisher):''}${item.barcode?' · '+escapeHtml(item.barcode):''}${item.index_number?' · Indeks: '+escapeHtml(item.index_number):''}</div>
       ${item.rating ? `<div style="color:var(--warn);font-size:18px;margin-bottom:10px;">${starsHtml(item.rating)}</div>` : ''}
       ${item.notes ? `<div class="meta" style="white-space:pre-wrap;margin-bottom:14px;">${escapeHtml(item.notes)}</div>` : ''}
+      ${item.personal_notes ? `
+        <div class="section-title" style="margin-top:4px;">Notatki</div>
+        <div class="meta" style="white-space:pre-wrap;margin-bottom:14px;">${escapeHtml(item.personal_notes)}</div>
+      ` : ''}
       ${item.status!=='wishlist' ? `
         <button class="btn ${item.watched ? 'secondary' : ''}" style="margin-bottom:10px;" onclick="toggleWatched('${item.id}')">${item.watched ? `Cofnij: ${TO_CONSUME_LABELS[item.type]}` : `Oznacz: ${CONSUMED_LABELS[item.type]}`}</button>
       ` : ''}
@@ -1888,6 +1899,7 @@ function editItem(id){
     index_number: item.index_number || '',
     publisher: item.publisher || '',
     notes: item.notes || '',
+    personal_notes: item.personal_notes || '',
     rating: item.rating || null,
     status: item.status || 'owned',
     watched: item.watched || false,
