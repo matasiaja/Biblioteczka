@@ -96,6 +96,12 @@
   .grid-item .name{font-size:12px;font-weight:500;margin-top:6px;line-height:1.3;overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;}
   .grid-item .checkbox-overlay{position:absolute;top:6px;left:6px;width:18px;height:18px;margin:0;z-index:1;}
   .grid-item-wrap{position:relative;}
+  .stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(84px,1fr));gap:10px;}
+  .stat-tile{background:var(--surface-2);border-radius:10px;padding:12px 10px;text-align:center;}
+  .stat-tile .stat-num{font-size:22px;font-weight:700;line-height:1.1;font-family:'Space Grotesk',sans-serif;}
+  .stat-tile .stat-label{font-size:11px;color:var(--text-dim);margin-top:4px;line-height:1.3;}
+  .stat-group-label{font-size:11px;color:var(--text-dim);text-transform:uppercase;letter-spacing:.6px;font-family:'IBM Plex Mono',monospace;margin:14px 0 8px;}
+  .stat-group-label:first-child{margin-top:0;}
 </style>
 </head>
 <body>
@@ -2334,14 +2340,34 @@ function renderSettings(main){
     </div>
     <div class="card">
       <div class="section-title">Statystyki</div>
-      <div class="meta">Pozycji w kolekcji: ${owned.length}</div>
-      <div class="meta">— Książki: ${bookCount} · Filmy: ${movieCount} · Muzyka: ${musicCount}</div>
-      ${wishlistCount ? `<div class="meta">Na liście życzeń: ${wishlistCount}</div>` : ''}
-      ${toConsumeCount ? `<div class="meta">Do obejrzenia / przeczytania / odsłuchania: ${toConsumeCount}</div>` : ''}
-      <div class="meta">Aktualnie pożyczone: ${state.loans.length}</div>
-      <div class="meta">— Wypożyczone innym: ${lentOutCount} · Pożyczone od kogoś: ${borrowedInCount}</div>
-      ${overdueCount ? `<div class="meta" style="color:var(--danger);">Przeterminowane: ${overdueCount}</div>` : ''}
-      ${rated.length ? `<div class="meta">Średnia ocena: ${avgRating.toFixed(1)}★ (${rated.length} ocenionych)</div>` : ''}
+      <div class="stat-group-label">Kolekcja</div>
+      <div class="stat-grid">
+        <div class="stat-tile"><div class="stat-num">${owned.length}</div><div class="stat-label">Razem</div></div>
+        <div class="stat-tile"><div class="stat-num">${bookCount}</div><div class="stat-label">Książki</div></div>
+        <div class="stat-tile"><div class="stat-num">${movieCount}</div><div class="stat-label">Filmy</div></div>
+        <div class="stat-tile"><div class="stat-num">${musicCount}</div><div class="stat-label">Muzyka</div></div>
+      </div>
+      ${(wishlistCount || toConsumeCount) ? `
+        <div class="stat-group-label">Do zrobienia</div>
+        <div class="stat-grid">
+          ${wishlistCount ? `<div class="stat-tile"><div class="stat-num" style="color:var(--warn);">${wishlistCount}</div><div class="stat-label">Lista życzeń</div></div>` : ''}
+          ${toConsumeCount ? `<div class="stat-tile"><div class="stat-num" style="color:var(--accent);">${toConsumeCount}</div><div class="stat-label">Do obejrzenia / przeczytania / odsłuchania</div></div>` : ''}
+        </div>
+      ` : ''}
+      <div class="stat-group-label">Wypożyczenia</div>
+      <div class="stat-grid">
+        <div class="stat-tile"><div class="stat-num">${state.loans.length}</div><div class="stat-label">Aktualnie</div></div>
+        <div class="stat-tile"><div class="stat-num">${lentOutCount}</div><div class="stat-label">Wypożyczone innym</div></div>
+        <div class="stat-tile"><div class="stat-num">${borrowedInCount}</div><div class="stat-label">Pożyczone od kogoś</div></div>
+        <div class="stat-tile"><div class="stat-num" style="color:${overdueCount?'var(--danger)':'var(--ok)'};">${overdueCount}</div><div class="stat-label">Przeterminowane</div></div>
+      </div>
+      ${rated.length ? `
+        <div class="stat-group-label">Oceny</div>
+        <div class="stat-tile" style="text-align:left;display:flex;align-items:center;gap:12px;">
+          <div class="stat-num" style="color:var(--warn);">${avgRating.toFixed(1)}★</div>
+          <div class="stat-label" style="margin-top:0;">średnia z ${rated.length} ${rated.length===1?'ocenionej pozycji':'ocenionych pozycji'}</div>
+        </div>
+      ` : ''}
     </div>
     ${formatRows.length ? `
       <div class="card">
