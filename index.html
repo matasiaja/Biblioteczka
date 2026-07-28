@@ -157,8 +157,7 @@ let state = {
   brokenCoversChecking: false,
   brokenCoversProgress: 0,
   brokenCoversTotal: 0,
-  brokenCoverIds: null,
-  toConsumeOnly: localStorage.getItem('bib_to_consume_only') === '1'
+  brokenCoverIds: null
 };
 
 const app = document.getElementById('app');
@@ -1441,9 +1440,11 @@ function isMissingField(item, field){
 }
 
 function missingSelect(){
+  const toConsumeLabel = state.typeFilter!=='all' ? TO_CONSUME_LABELS[state.typeFilter] : 'Do obejrzenia / przeczytania / odsłuchania';
   return `<select onchange="setMissingFilter(this.value)">
     <option value="none" ${state.missingFilter==='none'?'selected':''}>Braki: bez filtra</option>
     ${MISSING_FIELDS.map(([v,label])=>`<option value="${v}" ${state.missingFilter===v?'selected':''}>Brak: ${label}</option>`).join('')}
+    ${state.listView==='owned' ? `<option value="to_consume" ${state.missingFilter==='to_consume'?'selected':''}>${toConsumeLabel}</option>` : ''}
   </select>`;
 }
 
@@ -1453,19 +1454,16 @@ function setMissingFilter(v){
   renderTab();
 }
 
-function toggleToConsumeOnly(on){
-  state.toConsumeOnly = on;
-  localStorage.setItem('bib_to_consume_only', on ? '1' : '0');
-  renderTab();
-}
-
 function renderList(main){
   const byStatus = state.items.filter(i => (i.status||'owned') === state.listView);
   let filtered = sortByField(state.typeFilter==='all' ? byStatus : byStatus.filter(i=>i.type===state.typeFilter));
-  if (state.missingFilter !== 'none') filtered = filtered.filter(i =>
-    !(BOOK_ONLY_MISSING_FIELDS.includes(state.missingFilter) && i.type !== 'book') && isMissingField(i, state.missingFilter)
-  );
-  if (state.listView === 'owned' && state.toConsumeOnly) filtered = filtered.filter(i => !i.watched);
+  if (state.missingFilter === 'to_consume' && state.listView === 'owned'){
+    filtered = filtered.filter(i => !i.watched);
+  } else if (state.missingFilter !== 'none' && state.missingFilter !== 'to_consume'){
+    filtered = filtered.filter(i =>
+      !(BOOK_ONLY_MISSING_FIELDS.includes(state.missingFilter) && i.type !== 'book') && isMissingField(i, state.missingFilter)
+    );
+  }
   const counts = {
     all: byStatus.length,
     book: byStatus.filter(i=>i.type==='book').length,
@@ -1497,13 +1495,7 @@ function renderList(main){
     </div>
     ${sortSelect()}
     ${missingSelect()}
-    ${state.listView === 'owned' ? `
-      <label style="display:flex;align-items:center;gap:8px;margin-bottom:12px;cursor:pointer;">
-        <input type="checkbox" style="width:18px;height:18px;margin:0;" ${state.toConsumeOnly?'checked':''} onchange="toggleToConsumeOnly(this.checked)">
-        <span class="meta">Tylko ${(state.typeFilter!=='all' ? TO_CONSUME_LABELS[state.typeFilter] : 'do obejrzenia / przeczytania / odsłuchania').toLowerCase()}</span>
-      </label>
-    ` : ''}
-    ${filtered.length===0 ? `<div class="card"><div class="empty">${state.toConsumeOnly ? 'Wszystko obejrzane/przeczytane/odsłuchane 🎉' : state.missingFilter!=='none' ? 'Brak pozycji z tym brakiem — wszystko uzupełnione.' : 'Brak pozycji w tej kategorii.'}</div></div>` :
+    ${filtered.length===0 ? `<div class="card"><div class="empty">${state.missingFilter==='to_consume' ? 'Wszystko obejrzane/przeczytane/odsłuchane 🎉' : state.missingFilter!=='none' ? 'Brak pozycji z tym brakiem — wszystko uzupełnione.' : 'Brak pozycji w tej kategorii.'}</div></div>` :
       state.viewMode === 'grid' ? `
         <div class="grid">
           ${filtered.map(i=>{
