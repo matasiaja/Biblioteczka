@@ -1598,6 +1598,7 @@ async function saveItem(){
     status: document.getElementById('f-wishlist').checked ? 'wishlist' : 'owned',
     watched: document.getElementById('f-watched').checked
   };
+  if (payload.watched) payload.queue_position = null;
   if (!l.editingId){
     const dup = state.items.find(i =>
       (payload.barcode && i.barcode === payload.barcode) ||
@@ -1616,6 +1617,7 @@ async function saveItem(){
     : await sb.from('items').insert(payload);
   if (error){ toast('Błąd zapisu: ' + error.message); return; }
   await loadAll();
+  if (payload.watched) await renumberQueue();
   const wasEditing = l.editingId;
   setLookup(null);
   toast(wasEditing ? 'Zapisano zmiany' : 'Dodano do kolekcji');
@@ -1662,6 +1664,7 @@ function setMissingFilter(v){
 }
 
 function renderList(main){
+  if (state.listView === 'queue'){ renderQueueList(main); return; }
   const byStatus = state.items.filter(i => (i.status||'owned') === state.listView);
   let filtered = sortByField(state.typeFilter==='all' ? byStatus : byStatus.filter(i=>i.type===state.typeFilter));
   if (state.missingFilter === 'to_consume' && state.listView === 'owned'){
@@ -1679,6 +1682,7 @@ function renderList(main){
     music: byStatus.filter(i=>i.type==='music').length
   };
   const wishlistCount = state.items.filter(i=>i.status==='wishlist').length;
+  const queueCount = state.items.filter(i=>i.queue_position != null).length;
   main.innerHTML = `
     ${state.cameFromStats ? `<button class="link" style="margin-bottom:12px;" onclick="backToStats()">&larr; Wróć do statystyk</button>` : ''}
     <div class="row" style="margin-bottom:12px;">
@@ -1689,6 +1693,7 @@ function renderList(main){
     <div class="tabs">
       <button class="${state.listView==='owned'?'active':''}" onclick="setListView('owned')">Kolekcja</button>
       <button class="${state.listView==='wishlist'?'active':''}" onclick="setListView('wishlist')">Lista życzeń${wishlistCount?` (${wishlistCount})`:''}</button>
+      <button class="${state.listView==='queue'?'active':''}" onclick="setListView('queue')">Kolejka${queueCount?` (${queueCount})`:''}</button>
     </div>
     ${state.selectMode ? `
       <div class="card" style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px;padding:12px;flex-wrap:wrap;">
@@ -1757,6 +1762,85 @@ function setTypeFilter(t){
 function setListView(v){
   state.listView = v;
   localStorage.setItem('bib_list_view', v);
+  renderTab();
+}
+
+// ---------------- KOLEJKA "CO DALEJ" ----------------
+// Ręcznie ułożona kolejność (bez dat) tego, co obejrzeć/przeczytać/odsłuchać jako następne.
+function renderQueueList(main){
+  const wishlistCount = state.items.filter(i=>i.status==='wishlist').length;
+  const queued = state.items
+    .filter(i => i.queue_position != null)
+    .sort((a,b) => a.queue_position - b.queue_position);
+  main.innerHTML = `
+    ${state.cameFromStats ? `<button class="link" style="margin-bottom:12px;" onclick="backToStats()">&larr; Wróć do statystyk</button>` : ''}
+    <div class="tabs" style="margin-bottom:14px;">
+      <button onclick="setListView('owned')">Kolekcja</button>
+      <button onclick="setListView('wishlist')">Lista życzeń${wishlistCount?` (${wishlistCount})`:''}</button>
+      <button class="active">Kolejka${queued.length?` (${queued.length})`:''}</button>
+    </div>
+    ${queued.length===0 ? `
+      <div class="card"><div class="empty">Kolejka jest pusta — dodaj pozycje z „Do obejrzenia" w szczegółach pozycji.</div></div>
+    ` : `
+      <div class="card">
+        ${queued.map((i,idx) => `
+          <div class="item-row" onclick="openItem('${i.id}')">
+            <span class="meta mono" style="width:20px;flex-shrink:0;color:var(--text-dim);">${idx+1}.</span>
+            ${i.cover_url ? coverImg(i.cover_url, null, i.type) : `<div class="cover${i.type==='music'?' square':''}" style="display:flex;align-items:center;justify-content:center;color:var(--text-dim);">${icon(i.type)}</div>`}
+            <div style="flex:1;min-width:0;">
+              <div class="name">${escapeHtml(i.title)}</div>
+              <div class="meta">${escapeHtml(i.creator||'—')}</div>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:4px;flex-shrink:0;" onclick="event.stopPropagation();">
+              <button class="btn small secondary" style="padding:4px 10px;" onclick="moveQueueItem('${i.id}',-1)" ${idx===0?'disabled':''}>↑</button>
+              <button class="btn small secondary" style="padding:4px 10px;" onclick="moveQueueItem('${i.id}',1)" ${idx===queued.length-1?'disabled':''}>↓</button>
+            </div>
+          </div>
+        `).join('')}
+      </div>
+    `}
+  `;
+}
+
+async function addToQueue(itemId){
+  const maxPos = Math.max(0, ...state.items.filter(i=>i.queue_position!=null).map(i=>i.queue_position));
+  const { error } = await sb.from('items').update({ queue_position: maxPos + 1 }).eq('id', itemId);
+  if (error){ toast('Błąd: ' + error.message); return; }
+  await loadAll();
+  toast('Dodano do kolejki');
+  openItem(itemId);
+}
+
+async function removeFromQueue(itemId){
+  const { error } = await sb.from('items').update({ queue_position: null }).eq('id', itemId);
+  if (error){ toast('Błąd: ' + error.message); return; }
+  await loadAll();
+  await renumberQueue();
+  toast('Usunięto z kolejki');
+  if (state.listView === 'queue') renderTab(); else openItem(itemId);
+}
+
+async function renumberQueue(){
+  const queued = state.items
+    .filter(i => i.queue_position != null)
+    .sort((a,b) => a.queue_position - b.queue_position);
+  await Promise.all(queued.map((item, idx) =>
+    item.queue_position !== idx + 1 ? sb.from('items').update({ queue_position: idx + 1 }).eq('id', item.id) : null
+  ).filter(Boolean));
+}
+
+async function moveQueueItem(itemId, direction){
+  const queued = state.items
+    .filter(i => i.queue_position != null)
+    .sort((a,b) => a.queue_position - b.queue_position);
+  const idx = queued.findIndex(i => i.id === itemId);
+  const swapIdx = idx + direction;
+  if (idx === -1 || swapIdx < 0 || swapIdx >= queued.length) return;
+  const a = queued[idx], b = queued[swapIdx];
+  const { error } = await sb.from('items').update({ queue_position: b.queue_position }).eq('id', a.id);
+  if (error){ toast('Błąd: ' + error.message); return; }
+  await sb.from('items').update({ queue_position: a.queue_position }).eq('id', b.id);
+  await loadAll();
   renderTab();
 }
 
@@ -1898,9 +1982,11 @@ async function bulkDeleteItems(){
 
 async function bulkSetWatched(watched){
   if (state.selectedIds.length === 0) return;
-  const { error } = await sb.from('items').update({ watched }).in('id', state.selectedIds);
+  const payload = watched ? { watched, queue_position: null } : { watched };
+  const { error } = await sb.from('items').update(payload).in('id', state.selectedIds);
   if (error){ toast('Błąd: ' + error.message); return; }
   await loadAll();
+  if (watched) await renumberQueue();
   toast(watched ? `Oznaczono ${state.selectedIds.length} pozycji jako obejrzane` : `Cofnięto status obejrzane dla ${state.selectedIds.length} pozycji`);
   state.selectMode = false;
   state.selectedIds = [];
@@ -1935,6 +2021,9 @@ function openItem(id){
       ` : ''}
       ${item.status!=='wishlist' ? `
         <button class="btn ${item.watched ? 'secondary' : ''}" style="margin-bottom:10px;" onclick="toggleWatched('${item.id}')">${item.watched ? `Cofnij: ${TO_CONSUME_LABELS[item.type]}` : `Oznacz: ${CONSUMED_LABELS[item.type]}`}</button>
+      ` : ''}
+      ${item.status!=='wishlist' && !item.watched ? `
+        <button class="btn secondary" style="margin-bottom:10px;" onclick="${item.queue_position!=null ? `removeFromQueue('${item.id}')` : `addToQueue('${item.id}')`}">${item.queue_position!=null ? `Usuń z kolejki (#${item.queue_position})` : 'Dodaj do kolejki „co dalej"'}</button>
       ` : ''}
       ${item.status==='wishlist' ? `
         <button class="btn" onclick="markAsOwned('${item.id}')">Oznacz jako kupione</button>
@@ -1992,10 +2081,13 @@ async function markAsOwned(itemId){
 async function toggleWatched(itemId){
   const item = state.items.find(i=>i.id===itemId);
   if (!item) return;
-  const { error } = await sb.from('items').update({ watched: !item.watched }).eq('id', itemId);
+  const nowWatched = !item.watched;
+  const payload = nowWatched ? { watched: true, queue_position: null } : { watched: false };
+  const { error } = await sb.from('items').update(payload).eq('id', itemId);
   if (error){ toast('Błąd: ' + error.message); return; }
   await loadAll();
-  toast(!item.watched ? `Oznaczono: ${CONSUMED_LABELS[item.type]}` : `Cofnięto: ${TO_CONSUME_LABELS[item.type]}`);
+  if (nowWatched) await renumberQueue();
+  toast(nowWatched ? `Oznaczono: ${CONSUMED_LABELS[item.type]}` : `Cofnięto: ${TO_CONSUME_LABELS[item.type]}`);
   state.openItemId = null;
   renderTab();
 }

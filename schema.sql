@@ -21,6 +21,7 @@ create table items (
   rating integer check (rating between 1 and 5),
   status text not null default 'owned' check (status in ('owned','wishlist')), -- 'wishlist' = chcę kupić, jeszcze nie mam
   watched boolean not null default false, -- obejrzane/przeczytane/odsłuchane
+  queue_position integer, -- pozycja w kolejce "co dalej" (null = nie w kolejce)
   created_at timestamptz default now(),
   updated_at timestamptz default now()
 );
@@ -194,3 +195,8 @@ as $$
 $$;
 
 grant execute on function get_shared_collection(uuid) to anon;
+
+-- ============================================
+-- MIGRACJA: kolejka "co dalej" (uruchom ręcznie w SQL Editorze, jeśli baza już istnieje)
+-- ============================================
+alter table items add column if not exists queue_position integer;
