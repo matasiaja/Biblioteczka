@@ -157,7 +157,8 @@ let state = {
   brokenCoversChecking: false,
   brokenCoversProgress: 0,
   brokenCoversTotal: 0,
-  brokenCoverIds: null
+  brokenCoverIds: null,
+  loanBatchScanMode: localStorage.getItem('bib_loan_batch_scan') === '1'
 };
 
 const app = document.getElementById('app');
@@ -512,6 +513,11 @@ function setAddTarget(v){
 function toggleBatchScanMode(on){
   state.batchScanMode = on;
   localStorage.setItem('bib_batch_scan', on ? '1' : '0');
+}
+
+function toggleLoanBatchScanMode(on){
+  state.loanBatchScanMode = on;
+  localStorage.setItem('bib_loan_batch_scan', on ? '1' : '0');
 }
 
 function beginScan(){
@@ -1926,10 +1932,14 @@ function renderLoans(main){
         <div class="corner tl"></div><div class="corner tr"></div>
         <div class="corner bl"></div><div class="corner br"></div>
       </div>
-      <div class="scan-hint">Zeskanuj kod, żeby oznaczyć zwrot</div>
+      <div class="scan-hint">${state.loanBatchScanMode ? 'Zeskanuj kod, żeby oznaczyć zwrot — kamera zostanie włączona do kolejnego' : 'Zeskanuj kod, żeby oznaczyć zwrot'}</div>
       <div style="margin-top:14px;">
         <button class="btn secondary" onclick="cancelLoanScan()">Anuluj</button>
       </div>
+      <label style="display:flex;align-items:center;gap:8px;margin-top:16px;cursor:pointer;">
+        <input type="checkbox" style="width:18px;height:18px;margin:0;" ${state.loanBatchScanMode?'checked':''} onchange="toggleLoanBatchScanMode(this.checked)">
+        <span class="meta">Tryb ciągłego skanowania — po zwrocie od razu skanuj kolejny</span>
+      </label>
     `;
     startScanner(onLoanBarcode);
     return;
@@ -2102,7 +2112,7 @@ async function onLoanBarcode(code){
   const item = state.items.find(i => i.barcode === code);
   if (!item){
     toast('Nie znaleziono takiej pozycji w kolekcji');
-    renderTab();
+    if (state.loanBatchScanMode) startLoanScan(); else renderTab();
     return;
   }
   const loan = activeLoanFor(item.id);
@@ -2115,6 +2125,7 @@ async function onLoanBarcode(code){
     return;
   }
   await returnLoan(loan.id);
+  if (state.loanBatchScanMode) startLoanScan();
 }
 
 // ---------------- USTAWIENIA TAB ----------------
