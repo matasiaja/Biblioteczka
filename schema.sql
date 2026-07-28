@@ -19,6 +19,7 @@ create table items (
   notes text,
   rating integer check (rating between 1 and 5),
   status text not null default 'owned' check (status in ('owned','wishlist')), -- 'wishlist' = chcę kupić, jeszcze nie mam
+  watched boolean not null default false, -- obejrzane/przeczytane/odsłuchane
   created_at timestamptz default now(),
   updated_at timestamptz default now()
 );
@@ -26,6 +27,7 @@ create table items (
 create index items_barcode_idx on items(barcode);
 create index items_type_idx on items(type);
 create index items_status_idx on items(status);
+create index items_watched_idx on items(watched);
 
 -- Historia i aktualny stan wypożyczeń
 -- direction 'out' = ja pożyczam ten przedmiot komuś (mój, ktoś go ma)
@@ -87,3 +89,9 @@ create policy "Authenticated delete covers" on storage.objects for delete to aut
 -- ============================================
 alter table items add column if not exists status text not null default 'owned' check (status in ('owned','wishlist'));
 create index if not exists items_status_idx on items(status);
+
+-- ============================================
+-- MIGRACJA: "do obejrzenia" (uruchom ręcznie w SQL Editorze, jeśli baza już istnieje)
+-- ============================================
+alter table items add column if not exists watched boolean not null default false;
+create index if not exists items_watched_idx on items(watched);

@@ -123,6 +123,8 @@ const TYPE_FORMATS = {
 };
 const CREATOR_LABELS = { book: 'Autor', movie: 'Reżyser', music: 'Artysta' };
 const YEAR_LABELS = { book: 'Rok wydania', movie: 'Rok premiery', music: 'Rok wydania' };
+const CONSUMED_LABELS = { book: 'Przeczytane', movie: 'Obejrzane', music: 'Odsłuchane' };
+const TO_CONSUME_LABELS = { book: 'Do przeczytania', movie: 'Do obejrzenia', music: 'Do odsłuchania' };
 let state = {
   tab: localStorage.getItem('bib_tab') || 'scan',
   typeFilter: localStorage.getItem('bib_type_filter') || 'all',
@@ -155,7 +157,8 @@ let state = {
   brokenCoversChecking: false,
   brokenCoversProgress: 0,
   brokenCoversTotal: 0,
-  brokenCoverIds: null
+  brokenCoverIds: null,
+  toConsumeOnly: localStorage.getItem('bib_to_consume_only') === '1'
 };
 
 const app = document.getElementById('app');
@@ -1380,7 +1383,8 @@ async function saveItem(){
     cover_url: l.cover_url || null,
     notes: (notesEl ? notesEl.value.trim() : '') || null,
     rating: l.rating || null,
-    status: document.getElementById('f-wishlist').checked ? 'wishlist' : 'owned'
+    status: document.getElementById('f-wishlist').checked ? 'wishlist' : 'owned',
+    watched: l.watched || false
   };
   if (!l.editingId){
     const dup = state.items.find(i =>
@@ -1442,12 +1446,19 @@ function setMissingFilter(v){
   renderTab();
 }
 
+function toggleToConsumeOnly(on){
+  state.toConsumeOnly = on;
+  localStorage.setItem('bib_to_consume_only', on ? '1' : '0');
+  renderTab();
+}
+
 function renderList(main){
   const byStatus = state.items.filter(i => (i.status||'owned') === state.listView);
   let filtered = sortByField(state.typeFilter==='all' ? byStatus : byStatus.filter(i=>i.type===state.typeFilter));
   if (state.missingFilter !== 'none') filtered = filtered.filter(i =>
     !(BOOK_ONLY_MISSING_FIELDS.includes(state.missingFilter) && i.type !== 'book') && isMissingField(i, state.missingFilter)
   );
+  if (state.listView === 'owned' && state.toConsumeOnly) filtered = filtered.filter(i => !i.watched);
   const counts = {
     all: byStatus.length,
     book: byStatus.filter(i=>i.type==='book').length,
@@ -1479,7 +1490,13 @@ function renderList(main){
     </div>
     ${sortSelect()}
     ${missingSelect()}
-    ${filtered.length===0 ? `<div class="card"><div class="empty">${state.missingFilter!=='none' ? 'Brak pozycji z tym brakiem — wszystko uzupełnione.' : 'Brak pozycji w tej kategorii.'}</div></div>` :
+    ${state.listView === 'owned' ? `
+      <label style="display:flex;align-items:center;gap:8px;margin-bottom:12px;cursor:pointer;">
+        <input type="checkbox" style="width:18px;height:18px;margin:0;" ${state.toConsumeOnly?'checked':''} onchange="toggleToConsumeOnly(this.checked)">
+        <span class="meta">Tylko ${(state.typeFilter!=='all' ? TO_CONSUME_LABELS[state.typeFilter] : 'do obejrzenia / przeczytania / odsłuchania').toLowerCase()}</span>
+      </label>
+    ` : ''}
+    ${filtered.length===0 ? `<div class="card"><div class="empty">${state.toConsumeOnly ? 'Wszystko obejrzane/przeczytane/odsłuchane 🎉' : state.missingFilter!=='none' ? 'Brak pozycji z tym brakiem — wszystko uzupełnione.' : 'Brak pozycji w tej kategorii.'}</div></div>` :
       state.viewMode === 'grid' ? `
         <div class="grid">
           ${filtered.map(i=>{
@@ -1673,11 +1690,14 @@ function openItem(id){
         </div>
         <div style="text-align:center;color:var(--text-dim);font-size:11px;margin-bottom:14px;">kliknij okładkę, aby powiększyć &middot; <a href="#" onclick="event.stopPropagation();removeSavedCover('${item.id}');return false;" style="color:var(--text-dim);text-decoration:underline;">usuń okładkę</a></div>
       ` : ''}
-      <div class="section-title">${TYPE_LABELS[item.type]}${item.status==='wishlist' ? ' · Lista życzeń' : ''}</div>
+      <div class="section-title">${TYPE_LABELS[item.type]}${item.status==='wishlist' ? ' · Lista życzeń' : item.watched ? ' · '+CONSUMED_LABELS[item.type] : ' · '+TO_CONSUME_LABELS[item.type]}</div>
       <h2 style="margin:0 0 4px;">${escapeHtml(item.title)}</h2>
       <div class="meta mono" style="color:var(--text-dim);margin-bottom:14px;">${escapeHtml(item.creator||'—')}${item.format?' · '+escapeHtml(item.format):''}${item.year?' · '+item.year:''}${item.publisher?' · '+escapeHtml(item.publisher):''}${item.barcode?' · '+escapeHtml(item.barcode):''}${item.index_number?' · Indeks: '+escapeHtml(item.index_number):''}</div>
       ${item.rating ? `<div style="color:var(--warn);font-size:18px;margin-bottom:10px;">${starsHtml(item.rating)}</div>` : ''}
       ${item.notes ? `<div class="meta" style="white-space:pre-wrap;margin-bottom:14px;">${escapeHtml(item.notes)}</div>` : ''}
+      ${item.status!=='wishlist' ? `
+        <button class="btn ${item.watched ? 'secondary' : ''}" style="margin-bottom:10px;" onclick="toggleWatched('${item.id}')">${item.watched ? `Cofnij: ${TO_CONSUME_LABELS[item.type]}` : `Oznacz: ${CONSUMED_LABELS[item.type]}`}</button>
+      ` : ''}
       ${item.status==='wishlist' ? `
         <button class="btn" onclick="markAsOwned('${item.id}')">Oznacz jako kupione</button>
       ` : loan ? `
@@ -1728,6 +1748,16 @@ async function markAsOwned(itemId){
   if (error){ toast('Błąd: ' + error.message); return; }
   await loadAll();
   toast('Przeniesiono do kolekcji 🎉');
+  openItem(itemId);
+}
+
+async function toggleWatched(itemId){
+  const item = state.items.find(i=>i.id===itemId);
+  if (!item) return;
+  const { error } = await sb.from('items').update({ watched: !item.watched }).eq('id', itemId);
+  if (error){ toast('Błąd: ' + error.message); return; }
+  await loadAll();
+  toast(!item.watched ? `Oznaczono: ${CONSUMED_LABELS[item.type]}` : `Cofnięto: ${TO_CONSUME_LABELS[item.type]}`);
   openItem(itemId);
 }
 
@@ -1860,6 +1890,7 @@ function editItem(id){
     notes: item.notes || '',
     rating: item.rating || null,
     status: item.status || 'owned',
+    watched: item.watched || false,
     checksumOk: item.barcode ? isValidBarcodeChecksum(item.barcode) : true,
     debugLog: []
   };
@@ -2079,6 +2110,7 @@ function renderSettings(main){
   const lentOutCount = state.loans.filter(l=>l.direction!=='in').length;
   const borrowedInCount = state.loans.filter(l=>l.direction==='in').length;
   const overdueCount = state.loans.filter(isOverdue).length;
+  const toConsumeCount = owned.filter(i=>!i.watched).length;
   const rated = owned.filter(i=>i.rating);
   const avgRating = rated.length ? (rated.reduce((s,i)=>s+i.rating,0) / rated.length) : 0;
   const recent = [...owned].sort((a,b)=> new Date(b.created_at) - new Date(a.created_at)).slice(0,5);
@@ -2113,6 +2145,7 @@ function renderSettings(main){
       <div class="meta">Pozycji w kolekcji: ${owned.length}</div>
       <div class="meta">— Książki: ${bookCount} · Filmy: ${movieCount} · Muzyka: ${musicCount}</div>
       ${wishlistCount ? `<div class="meta">Na liście życzeń: ${wishlistCount}</div>` : ''}
+      ${toConsumeCount ? `<div class="meta">Do obejrzenia / przeczytania / odsłuchania: ${toConsumeCount}</div>` : ''}
       <div class="meta">Aktualnie pożyczone: ${state.loans.length}</div>
       <div class="meta">— Wypożyczone innym: ${lentOutCount} · Pożyczone od kogoś: ${borrowedInCount}</div>
       ${overdueCount ? `<div class="meta" style="color:var(--danger);">Przeterminowane: ${overdueCount}</div>` : ''}
