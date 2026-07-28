@@ -1008,7 +1008,7 @@ function renderAddForm(main){
     <div class="section-title">${l.editingId ? 'Edytuj pozycję' : 'Nowa pozycja'}</div>
     ${dup ? `
       <div class="card" style="background:rgba(255,176,32,.1);border:1px solid var(--warn);margin-bottom:12px;padding:12px;">
-        <div style="color:var(--warn);font-size:13px;margin-bottom:8px;">⚠ Masz już podobną pozycję w kolekcji: <strong>${escapeHtml(dup.title)}</strong>${dup.creator?' — '+escapeHtml(dup.creator):''}</div>
+        <div style="color:var(--warn);font-size:13px;margin-bottom:8px;">⚠ ${dup.status==='wishlist' ? 'Masz już podobną pozycję na liście życzeń' : 'Masz już podobną pozycję w kolekcji'}: <strong>${escapeHtml(dup.title)}</strong>${dup.creator?' — '+escapeHtml(dup.creator):''}</div>
         <button type="button" class="btn small secondary" onclick="setLookup(null);openItem('${dup.id}')">Otwórz istniejącą pozycję</button>
       </div>
     ` : ''}
@@ -1403,7 +1403,7 @@ async function saveItem(){
       (i.title.trim().toLowerCase() === title.toLowerCase() && (i.creator||'').trim().toLowerCase() === (payload.creator||'').trim().toLowerCase())
     );
     if (dup){
-      toast(`"${dup.title}" już masz w kolekcji 📚 — otwieram tę pozycję`);
+      toast(dup.status==='wishlist' ? `"${dup.title}" jest już na Twojej liście życzeń ⭐ — otwieram tę pozycję` : `"${dup.title}" już masz w kolekcji 📚 — otwieram tę pozycję`);
       setLookup(null);
       render();
       openItem(dup.id);
