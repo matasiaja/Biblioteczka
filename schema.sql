@@ -76,6 +76,8 @@ create policy "auth_full_access" on app_settings for all
 -- Publiczny, tylko-do-odczytu dostęp do kolekcji przez link współdzielenia — bez tabel
 -- udostępnianych bezpośrednio anonimom: ta funkcja (SECURITY DEFINER) sama sprawdza,
 -- czy udostępnianie jest włączone i czy podany token się zgadza, zanim cokolwiek zwróci.
+-- Zwraca kolekcję I listę życzeń (status, queue_position) — celowo NIE zwraca barcode,
+-- index_number, publisher, personal_notes ani nic o wypożyczeniach (dane innej osoby).
 create or replace function get_shared_collection(token uuid)
 returns table (
   id uuid,
@@ -87,19 +89,20 @@ returns table (
   cover_url text,
   notes text,
   rating integer,
-  watched boolean
+  watched boolean,
+  status text,
+  queue_position integer
 )
 language sql
 security definer
 set search_path = public
 as $$
-  select i.id, i.title, i.type, i.creator, i.format, i.year, i.cover_url, i.notes, i.rating, i.watched
+  select i.id, i.title, i.type, i.creator, i.format, i.year, i.cover_url, i.notes, i.rating, i.watched, i.status, i.queue_position
   from items i
-  where i.status = 'owned'
-    and exists (
-      select 1 from app_settings s
-      where s.share_enabled = true and s.share_token = token
-    )
+  where exists (
+    select 1 from app_settings s
+    where s.share_enabled = true and s.share_token = token
+  )
   order by i.title;
 $$;
 
@@ -200,3 +203,41 @@ grant execute on function get_shared_collection(uuid) to anon;
 -- MIGRACJA: kolejka "co dalej" (uruchom ręcznie w SQL Editorze, jeśli baza już istnieje)
 -- ============================================
 alter table items add column if not exists queue_position integer;
+
+-- ============================================
+-- MIGRACJA: rozszerzenie publicznego demo o listę życzeń, kolejkę i status
+-- (uruchom ręcznie w SQL Editorze, jeśli wcześniej uruchamiałeś/aś starszą wersję
+-- get_shared_collection() — Postgres nie pozwala zmienić kolumn zwracanych przez
+-- CREATE OR REPLACE, więc trzeba najpierw usunąć starą wersję funkcji)
+-- ============================================
+drop function if exists get_shared_collection(uuid);
+
+create function get_shared_collection(token uuid)
+returns table (
+  id uuid,
+  title text,
+  type text,
+  creator text,
+  format text,
+  year integer,
+  cover_url text,
+  notes text,
+  rating integer,
+  watched boolean,
+  status text,
+  queue_position integer
+)
+language sql
+security definer
+set search_path = public
+as $$
+  select i.id, i.title, i.type, i.creator, i.format, i.year, i.cover_url, i.notes, i.rating, i.watched, i.status, i.queue_position
+  from items i
+  where exists (
+    select 1 from app_settings s
+    where s.share_enabled = true and s.share_token = token
+  )
+  order by i.title;
+$$;
+
+grant execute on function get_shared_collection(uuid) to anon;

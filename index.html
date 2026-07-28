@@ -324,10 +324,12 @@ const PUBLIC_SORT_OPTIONS = [
 ];
 
 let publicShareItems = [];
-let publicViewState = { typeFilter: 'all', sortBy: 'title', sortDir: 'asc', query: '' };
+let publicViewState = { view: 'collection', typeFilter: 'all', sortBy: 'title', sortDir: 'asc', query: '' };
 
 function renderPublicShareView(items){
   publicShareItems = items;
+  const wishlistCount = items.filter(i=>i.status==='wishlist').length;
+  const queueCount = items.filter(i=>i.status==='owned' && i.queue_position!=null).length;
   app.innerHTML = `
     <header class="topbar">
       <div style="display:flex;align-items:center;gap:10px;">
@@ -336,14 +338,37 @@ function renderPublicShareView(items){
       </div>
     </header>
     <main style="padding:16px;">
-      <input id="public-search" placeholder="Szukaj w kolekcji…" style="margin-bottom:14px;" oninput="setPublicQuery(this.value)">
-      <div class="tabs" id="public-type-tabs" style="margin-bottom:14px;"></div>
-      <div class="row" style="margin-bottom:14px;">
-        <select id="public-sort" onchange="setPublicSort(this.value)" style="margin-bottom:0;"></select>
-        <button type="button" class="btn small secondary" style="flex:0 0 auto;" onclick="togglePublicSortDir()" id="public-sort-dir"></button>
+      <div class="tabs" style="margin-bottom:14px;">
+        <button class="${publicViewState.view==='collection'?'active':''}" onclick="setPublicView('collection')">Kolekcja</button>
+        <button class="${publicViewState.view==='wishlist'?'active':''}" onclick="setPublicView('wishlist')">Lista życzeń${wishlistCount?` (${wishlistCount})`:''}</button>
+        <button class="${publicViewState.view==='queue'?'active':''}" onclick="setPublicView('queue')">Kolejka${queueCount?` (${queueCount})`:''}</button>
+        <button class="${publicViewState.view==='stats'?'active':''}" onclick="setPublicView('stats')">Statystyki</button>
       </div>
-      <div class="grid" id="public-grid"></div>
+      <div id="public-view-body"></div>
     </main>
+  `;
+  renderPublicViewBody();
+}
+
+function setPublicView(v){
+  publicViewState.view = v;
+  publicViewState.typeFilter = 'all';
+  publicViewState.query = '';
+  renderPublicViewBody();
+}
+
+function renderPublicViewBody(){
+  const body = document.getElementById('public-view-body');
+  if (publicViewState.view === 'stats'){ body.innerHTML = publicStatsHtml(); return; }
+  if (publicViewState.view === 'queue'){ body.innerHTML = publicQueueHtml(); return; }
+  body.innerHTML = `
+    <input id="public-search" placeholder="Szukaj…" value="${escapeHtml(publicViewState.query)}" style="margin-bottom:14px;" oninput="setPublicQuery(this.value)">
+    <div class="tabs" id="public-type-tabs" style="margin-bottom:14px;"></div>
+    <div class="row" style="margin-bottom:14px;">
+      <select id="public-sort" onchange="setPublicSort(this.value)" style="margin-bottom:0;"></select>
+      <button type="button" class="btn small secondary" style="flex:0 0 auto;" onclick="togglePublicSortDir()" id="public-sort-dir"></button>
+    </div>
+    <div class="grid" id="public-grid"></div>
   `;
   renderPublicGrid();
 }
@@ -368,12 +393,17 @@ function togglePublicSortDir(){
   renderPublicGrid();
 }
 
+function publicBaseItems(){
+  return publicShareItems.filter(i => i.status === (publicViewState.view === 'wishlist' ? 'wishlist' : 'owned'));
+}
+
 function renderPublicGrid(queryOnly){
+  const base = publicBaseItems();
   const counts = {
-    all: publicShareItems.length,
-    book: publicShareItems.filter(i=>i.type==='book').length,
-    movie: publicShareItems.filter(i=>i.type==='movie').length,
-    music: publicShareItems.filter(i=>i.type==='music').length
+    all: base.length,
+    book: base.filter(i=>i.type==='book').length,
+    movie: base.filter(i=>i.type==='movie').length,
+    music: base.filter(i=>i.type==='music').length
   };
   if (!queryOnly){
     document.getElementById('public-type-tabs').innerHTML = ['all','book','movie','music'].map(t=>
@@ -387,7 +417,7 @@ function renderPublicGrid(queryOnly){
     dirBtn.textContent = publicViewState.sortDir==='desc' ? (numeric?'↓ malejąco':'Z-A ↓') : (numeric?'↑ rosnąco':'A-Z ↑');
   }
   const q = publicViewState.query.trim().toLowerCase();
-  let filtered = publicViewState.typeFilter==='all' ? publicShareItems : publicShareItems.filter(i=>i.type===publicViewState.typeFilter);
+  let filtered = publicViewState.typeFilter==='all' ? base : base.filter(i=>i.type===publicViewState.typeFilter);
   if (q) filtered = filtered.filter(i => (i.title||'').toLowerCase().includes(q) || (i.creator||'').toLowerCase().includes(q));
   const dir = publicViewState.sortDir === 'desc' ? -1 : 1;
   const collator = new Intl.Collator('pl', { sensitivity: 'base' });
@@ -409,6 +439,82 @@ function publicGridItemHtml(i){
   </div>`;
 }
 
+function publicQueueHtml(){
+  const queued = publicShareItems
+    .filter(i => i.status==='owned' && i.queue_position != null)
+    .sort((a,b) => a.queue_position - b.queue_position);
+  if (queued.length === 0) return `<div class="card"><div class="empty">Kolejka jest pusta.</div></div>`;
+  return `<div class="card">
+    ${queued.map((i,idx) => `
+      <div class="item-row" onclick="openPublicItem('${i.id}')">
+        <span class="meta mono" style="width:20px;flex-shrink:0;color:var(--text-dim);">${idx+1}.</span>
+        ${i.cover_url ? coverImg(i.cover_url, null, i.type) : `<div class="cover${i.type==='music'?' square':''}" style="display:flex;align-items:center;justify-content:center;color:var(--text-dim);">${icon(i.type)}</div>`}
+        <div style="flex:1;min-width:0;">
+          <div class="name">${escapeHtml(i.title)}</div>
+          <div class="meta">${escapeHtml(i.creator||'—')}</div>
+        </div>
+      </div>
+    `).join('')}
+  </div>`;
+}
+
+function publicStatsHtml(){
+  const owned = publicShareItems.filter(i=>i.status==='owned');
+  const wishlistCount = publicShareItems.filter(i=>i.status==='wishlist').length;
+  const toConsumeCount = owned.filter(i=>!i.watched).length;
+  const bookCount = owned.filter(i=>i.type==='book').length;
+  const movieCount = owned.filter(i=>i.type==='movie').length;
+  const musicCount = owned.filter(i=>i.type==='music').length;
+  const rated = owned.filter(i=>i.rating);
+  const avgRating = rated.length ? (rated.reduce((s,i)=>s+i.rating,0) / rated.length) : 0;
+
+  const formatCounts = {};
+  owned.forEach(i => { if (i.format) formatCounts[i.format] = (formatCounts[i.format]||0) + 1; });
+  const formatRows = Object.entries(formatCounts).sort((a,b)=>b[1]-a[1]);
+  const maxFormat = Math.max(1, ...formatRows.map(r=>r[1]));
+  const barRow = (label, count, max) => `
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+      <div class="meta" style="width:80px;flex-shrink:0;">${escapeHtml(label)}</div>
+      <div style="flex:1;background:var(--surface-2);border-radius:4px;overflow:hidden;height:16px;">
+        <div style="width:${Math.round(count/max*100)}%;background:var(--accent);height:100%;"></div>
+      </div>
+      <div class="meta" style="width:28px;text-align:right;flex-shrink:0;">${count}</div>
+    </div>`;
+
+  return `
+    <div class="card">
+      <div class="section-title">Statystyki</div>
+      <div class="stat-group-label">Kolekcja</div>
+      <div class="stat-grid">
+        <div class="stat-tile" style="cursor:default;"><div class="stat-num">${owned.length}</div><div class="stat-label">Razem</div></div>
+        <div class="stat-tile" style="cursor:default;"><div class="stat-num">${bookCount}</div><div class="stat-label">Książki</div></div>
+        <div class="stat-tile" style="cursor:default;"><div class="stat-num">${movieCount}</div><div class="stat-label">Filmy</div></div>
+        <div class="stat-tile" style="cursor:default;"><div class="stat-num">${musicCount}</div><div class="stat-label">Muzyka</div></div>
+      </div>
+      ${(wishlistCount || toConsumeCount) ? `
+        <div class="stat-group-label">Do zrobienia</div>
+        <div class="stat-grid">
+          ${wishlistCount ? `<div class="stat-tile" style="cursor:default;"><div class="stat-num" style="color:var(--warn);">${wishlistCount}</div><div class="stat-label">Lista życzeń</div></div>` : ''}
+          ${toConsumeCount ? `<div class="stat-tile" style="cursor:default;"><div class="stat-num" style="color:var(--accent);">${toConsumeCount}</div><div class="stat-label">Do obejrzenia / przeczytania / odsłuchania</div></div>` : ''}
+        </div>
+      ` : ''}
+      ${rated.length ? `
+        <div class="stat-group-label">Oceny</div>
+        <div class="stat-tile" style="cursor:default;text-align:left;display:flex;align-items:center;gap:12px;">
+          <div class="stat-num" style="color:var(--warn);">${avgRating.toFixed(1)}★</div>
+          <div class="stat-label" style="margin-top:0;">średnia z ${rated.length} ${rated.length===1?'ocenionej pozycji':'ocenionych pozycji'}</div>
+        </div>
+      ` : ''}
+    </div>
+    ${formatRows.length ? `
+      <div class="card">
+        <div class="section-title">Wg formatu</div>
+        ${formatRows.map(([label,count])=>barRow(label,count,maxFormat)).join('')}
+      </div>
+    ` : ''}
+  `;
+}
+
 function openPublicItem(id){
   const item = publicShareItems.find(i=>i.id===id);
   if (!item) return;
@@ -419,7 +525,7 @@ function openPublicItem(id){
   overlay.innerHTML = `
     <div class="card" style="max-width:420px;width:100%;margin-top:40px;cursor:default;" onclick="event.stopPropagation();">
       ${item.cover_url ? `<div style="text-align:center;margin-bottom:12px;">${coverImg(item.cover_url, 140, item.type)}</div>` : ''}
-      <div class="section-title">${TYPE_LABELS[item.type]}${item.watched ? ' · '+CONSUMED_LABELS[item.type] : ''}</div>
+      <div class="section-title">${TYPE_LABELS[item.type]}${item.status==='wishlist' ? ' · Lista życzeń' : item.watched ? ' · '+CONSUMED_LABELS[item.type] : ''}</div>
       <h2 style="margin:0 0 4px;">${escapeHtml(item.title)}</h2>
       <div class="meta mono" style="color:var(--text-dim);margin-bottom:14px;">${escapeHtml(item.creator||'—')}${item.format?' · '+escapeHtml(item.format):''}${item.year?' · '+item.year:''}</div>
       ${item.rating ? `<div style="color:var(--warn);font-size:18px;margin-bottom:10px;">${starsHtml(item.rating)}</div>` : ''}
