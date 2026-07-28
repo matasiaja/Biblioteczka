@@ -2140,8 +2140,15 @@ function renderSettings(main){
   owned.forEach(i => { if (i.year) { const d = Math.floor(i.year/10)*10; decadeCounts[d] = (decadeCounts[d]||0) + 1; } });
   const decadeRows = Object.entries(decadeCounts).sort((a,b)=>a[0]-b[0]);
 
+  const addedYearCounts = {};
+  owned.forEach(i => { if (i.created_at){ const y = new Date(i.created_at).getFullYear(); addedYearCounts[y] = (addedYearCounts[y]||0) + 1; } });
+  const addedYearRows = Object.entries(addedYearCounts).sort((a,b)=>a[0]-b[0]);
+
+  const topRated = [...owned].filter(i=>i.rating===5).sort((a,b)=> new Date(b.created_at) - new Date(a.created_at)).slice(0,10);
+
   const maxFormat = Math.max(1, ...formatRows.map(r=>r[1]));
   const maxDecade = Math.max(1, ...decadeRows.map(r=>r[1]));
+  const maxAddedYear = Math.max(1, ...addedYearRows.map(r=>r[1]));
   const barRow = (label, count, max) => `
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
       <div class="meta" style="width:80px;flex-shrink:0;">${escapeHtml(label)}</div>
@@ -2178,6 +2185,24 @@ function renderSettings(main){
       <div class="card">
         <div class="section-title">Wg dekady</div>
         ${decadeRows.map(([decade,count])=>barRow(decade+'s',count,maxDecade)).join('')}
+      </div>
+    ` : ''}
+    ${addedYearRows.length > 1 ? `
+      <div class="card">
+        <div class="section-title">Dodane w czasie</div>
+        ${addedYearRows.map(([year,count])=>barRow(year,count,maxAddedYear)).join('')}
+      </div>
+    ` : ''}
+    ${topRated.length ? `
+      <div class="card">
+        <div class="section-title">Najwyżej oceniane (★★★★★)</div>
+        ${topRated.map(i=>`<div class="item-row" onclick="openItem('${i.id}')">
+          ${i.cover_url ? coverImg(i.cover_url, null, i.type) : `<div class="cover${i.type==='music'?' square':''}" style="display:flex;align-items:center;justify-content:center;color:var(--text-dim);">${icon(i.type)}</div>`}
+          <div style="flex:1;min-width:0;">
+            <div class="name">${escapeHtml(i.title)}</div>
+            <div class="meta">${escapeHtml(i.creator||'—')}</div>
+          </div>
+        </div>`).join('')}
       </div>
     ` : ''}
     ${recent.length ? `
