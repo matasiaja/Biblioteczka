@@ -1654,6 +1654,7 @@ function missingSelect(){
     <option value="none" ${state.missingFilter==='none'?'selected':''}>Braki: bez filtra</option>
     ${MISSING_FIELDS.map(([v,label])=>`<option value="${v}" ${state.missingFilter===v?'selected':''}>Brak: ${label}</option>`).join('')}
     ${state.listView==='owned' ? `<option value="to_consume" ${state.missingFilter==='to_consume'?'selected':''}>${toConsumeLabel}</option>` : ''}
+    ${state.listView==='owned' ? `<option value="queue" ${state.missingFilter==='queue'?'selected':''}>W kolejce „co dalej"</option>` : ''}
   </select>`;
 }
 
@@ -1669,7 +1670,9 @@ function renderList(main){
   let filtered = sortByField(state.typeFilter==='all' ? byStatus : byStatus.filter(i=>i.type===state.typeFilter));
   if (state.missingFilter === 'to_consume' && state.listView === 'owned'){
     filtered = filtered.filter(i => !i.watched);
-  } else if (state.missingFilter !== 'none' && state.missingFilter !== 'to_consume'){
+  } else if (state.missingFilter === 'queue' && state.listView === 'owned'){
+    filtered = filtered.filter(i => i.queue_position != null).sort((a,b) => a.queue_position - b.queue_position);
+  } else if (state.missingFilter !== 'none' && state.missingFilter !== 'to_consume' && state.missingFilter !== 'queue'){
     filtered = filtered.filter(i =>
       !(BOOK_ONLY_MISSING_FIELDS.includes(state.missingFilter) && i.type !== 'book') && isMissingField(i, state.missingFilter)
     );
@@ -1713,7 +1716,7 @@ function renderList(main){
     </div>
     ${sortSelect()}
     ${missingSelect()}
-    ${filtered.length===0 ? `<div class="card"><div class="empty">${state.missingFilter==='to_consume' ? 'Wszystko obejrzane/przeczytane/odsłuchane 🎉' : state.missingFilter!=='none' ? 'Brak pozycji z tym brakiem — wszystko uzupełnione.' : 'Brak pozycji w tej kategorii.'}</div></div>` :
+    ${filtered.length===0 ? `<div class="card"><div class="empty">${state.missingFilter==='to_consume' ? 'Wszystko obejrzane/przeczytane/odsłuchane 🎉' : state.missingFilter==='queue' ? 'Kolejka jest pusta — dodaj pozycje z „Do obejrzenia" w szczegółach pozycji.' : state.missingFilter!=='none' ? 'Brak pozycji z tym brakiem — wszystko uzupełnione.' : 'Brak pozycji w tej kategorii.'}</div></div>` :
       state.viewMode === 'grid' ? `
         <div class="grid">
           ${filtered.map(i=>{
