@@ -164,6 +164,8 @@ let state = {
   showLoanHistory: false,
   loanHistory: null,
   loanHistoryLoading: false,
+  historySelectMode: false,
+  selectedHistoryIds: [],
   batchScanMode: localStorage.getItem('bib_batch_scan') === '1',
   listView: localStorage.getItem('bib_list_view') || 'owned',
   addTarget: 'owned',
@@ -2537,12 +2539,29 @@ function renderLoanHistoryHtml(){
     const item = state.items.find(i=>i.id===l.item_id);
     return item && item.type === state.loanTypeFilter;
   });
-  if (byType.length === 0) return `<div class="card"><div class="empty">Brak historii zwróconych pożyczek.</div></div>`;
-  return `<div class="section-title">Historia zwróconych (${byType.length})</div>
+  const historyToolbar = `
+    <div class="row" style="margin-bottom:12px;">
+      <button class="btn small secondary" onclick="toggleHistorySelectMode()">${state.historySelectMode ? 'Gotowe' : 'Zaznacz'}</button>
+    </div>
+    ${state.historySelectMode ? `
+      <div class="card" style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px;padding:12px;flex-wrap:wrap;">
+        <span class="meta">Zaznaczono: ${state.selectedHistoryIds.length}</span>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <button class="btn small secondary" onclick="selectAllHistory()">Zaznacz wszystko</button>
+          <button class="btn small secondary" onclick="cancelHistorySelectMode()">Anuluj</button>
+          <button class="btn small danger" onclick="deleteSelectedHistory()" ${state.selectedHistoryIds.length===0?'disabled':''}>Usuń zaznaczone</button>
+        </div>
+      </div>
+    ` : ''}
+  `;
+  if (byType.length === 0) return `${historyToolbar}<div class="card"><div class="empty">Brak historii zwróconych pożyczek.</div></div>`;
+  return `${historyToolbar}<div class="section-title">Historia zwróconych (${byType.length})</div>
     <div class="card">
       ${byType.map(l => {
         const item = state.items.find(i=>i.id===l.item_id);
-        return `<div class="item-row" onclick="openItem('${l.item_id}')">
+        const checked = state.selectedHistoryIds.includes(l.id);
+        return `<div class="item-row" onclick="${state.historySelectMode ? `toggleSelectHistory('${l.id}')` : `openItem('${l.item_id}')`}">
+          ${state.historySelectMode ? `<input type="checkbox" ${checked?'checked':''} onclick="event.stopPropagation();toggleSelectHistory('${l.id}')" style="width:18px;height:18px;flex-shrink:0;margin:0;">` : ''}
           ${item && item.cover_url ? coverImg(item.cover_url, null, item.type) : `<div class="cover${item && item.type==='music'?' square':''}" style="display:flex;align-items:center;justify-content:center;color:var(--text-dim);">${icon(item ? item.type : 'book')}</div>`}
           <div style="flex:1;min-width:0;">
             <div class="name">${escapeHtml(item ? item.title : '—')}</div>
@@ -2551,6 +2570,46 @@ function renderLoanHistoryHtml(){
         </div>`;
       }).join('')}
     </div>`;
+}
+
+function toggleHistorySelectMode(){
+  state.historySelectMode = !state.historySelectMode;
+  if (!state.historySelectMode) state.selectedHistoryIds = [];
+  renderTab();
+}
+
+function cancelHistorySelectMode(){
+  state.historySelectMode = false;
+  state.selectedHistoryIds = [];
+  renderTab();
+}
+
+function toggleSelectHistory(id){
+  const idx = state.selectedHistoryIds.indexOf(id);
+  if (idx === -1) state.selectedHistoryIds.push(id); else state.selectedHistoryIds.splice(idx, 1);
+  renderTab();
+}
+
+function selectAllHistory(){
+  const history = state.loanHistory || [];
+  const byType = state.loanTypeFilter==='all' ? history : history.filter(l=>{
+    const item = state.items.find(i=>i.id===l.item_id);
+    return item && item.type === state.loanTypeFilter;
+  });
+  state.selectedHistoryIds = byType.map(l=>l.id);
+  renderTab();
+}
+
+async function deleteSelectedHistory(){
+  if (state.selectedHistoryIds.length === 0) return;
+  if (!confirm(`Na pewno usunąć ${state.selectedHistoryIds.length} pozycji z historii wypożyczeń? Tej operacji nie można cofnąć.`)) return;
+  const { error } = await sb.from('loans').delete().in('id', state.selectedHistoryIds);
+  if (error){ toast('Błąd: ' + error.message); return; }
+  state.loanHistory = (state.loanHistory || []).filter(l => !state.selectedHistoryIds.includes(l.id));
+  toast(`Usunięto ${state.selectedHistoryIds.length} pozycji z historii`);
+  state.historySelectMode = false;
+  state.selectedHistoryIds = [];
+  renderTab();
 }
 
 function toggleLoanSelectMode(){
