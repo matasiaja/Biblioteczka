@@ -894,16 +894,34 @@ function hwScanInputHtml(id, placeholder){
 }
 
 // Skaner USB/BT (np. NETUM NT-1228BL) działa jako klawiatura — wpisuje kod i wysyła Enter.
-// Wystarczy, że to pole ma fokus; nie wymaga kamery ani dotykania ekranu.
+// Na Androidzie ten "Enter" od zewnętrznej klawiatury Bluetooth często nie dociera jako
+// zdarzenie keydown (zależnie od przeglądarki/IME), więc oprócz obsługi Entera dokładamy
+// awaryjny mechanizm: skaner wpisuje cały kod błyskawicznie, więc krótka pauza w pisaniu
+// (200ms bez nowego znaku) też oznacza, że skan się skończył — wysyłamy kod automatycznie.
 function bindHwScanInput(id, onSubmit){
   const el = document.getElementById(id);
   if (!el) return;
+  let timer = null;
+  const submitNow = () => {
+    clearTimeout(timer);
+    const code = el.value.replace(/[\r\n]+$/, '').trim();
+    el.value = '';
+    if (code) onSubmit(code);
+  };
   el.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter'){
+    if (e.key === 'Enter' || e.key === 'Tab'){
       e.preventDefault();
-      const code = el.value.trim();
-      el.value = '';
-      if (code) onSubmit(code);
+      submitNow();
+    }
+  });
+  el.addEventListener('input', () => {
+    if (/[\r\n]/.test(el.value)){
+      submitNow();
+      return;
+    }
+    clearTimeout(timer);
+    if (el.value.trim().length >= 4){
+      timer = setTimeout(submitNow, 200);
     }
   });
   el.focus();
