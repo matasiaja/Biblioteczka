@@ -326,10 +326,19 @@ const PUBLIC_SORT_OPTIONS = [
 let publicShareItems = [];
 let publicViewState = { view: 'collection', typeFilter: 'all', sortBy: 'title', sortDir: 'asc', query: '' };
 
+function publicTabsHtml(){
+  const wishlistCount = publicShareItems.filter(i=>i.status==='wishlist').length;
+  const queueCount = publicShareItems.filter(i=>i.status==='owned' && i.queue_position!=null).length;
+  return `
+    <button class="${publicViewState.view==='collection'?'active':''}" onclick="setPublicView('collection')">Kolekcja</button>
+    <button class="${publicViewState.view==='wishlist'?'active':''}" onclick="setPublicView('wishlist')">Lista życzeń${wishlistCount?` (${wishlistCount})`:''}</button>
+    <button class="${publicViewState.view==='queue'?'active':''}" onclick="setPublicView('queue')">Kolejka${queueCount?` (${queueCount})`:''}</button>
+    <button class="${publicViewState.view==='stats'?'active':''}" onclick="setPublicView('stats')">Statystyki</button>
+  `;
+}
+
 function renderPublicShareView(items){
   publicShareItems = items;
-  const wishlistCount = items.filter(i=>i.status==='wishlist').length;
-  const queueCount = items.filter(i=>i.status==='owned' && i.queue_position!=null).length;
   app.innerHTML = `
     <header class="topbar">
       <div style="display:flex;align-items:center;gap:10px;">
@@ -338,12 +347,7 @@ function renderPublicShareView(items){
       </div>
     </header>
     <main style="padding:16px;">
-      <div class="tabs" style="margin-bottom:14px;">
-        <button class="${publicViewState.view==='collection'?'active':''}" onclick="setPublicView('collection')">Kolekcja</button>
-        <button class="${publicViewState.view==='wishlist'?'active':''}" onclick="setPublicView('wishlist')">Lista życzeń${wishlistCount?` (${wishlistCount})`:''}</button>
-        <button class="${publicViewState.view==='queue'?'active':''}" onclick="setPublicView('queue')">Kolejka${queueCount?` (${queueCount})`:''}</button>
-        <button class="${publicViewState.view==='stats'?'active':''}" onclick="setPublicView('stats')">Statystyki</button>
-      </div>
+      <div class="tabs" id="public-tabs" style="margin-bottom:14px;">${publicTabsHtml()}</div>
       <div id="public-view-body"></div>
     </main>
   `;
@@ -354,6 +358,7 @@ function setPublicView(v){
   publicViewState.view = v;
   publicViewState.typeFilter = 'all';
   publicViewState.query = '';
+  document.getElementById('public-tabs').innerHTML = publicTabsHtml();
   renderPublicViewBody();
 }
 
