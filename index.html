@@ -93,14 +93,16 @@
   .link{color:var(--accent);background:none;border:none;font-family:inherit;font-size:13px;cursor:pointer;padding:0;}
   .section-title{font-size:12px;color:var(--text-dim);text-transform:uppercase;letter-spacing:.6px;font-family:'IBM Plex Mono',monospace;margin:4px 0 10px;}
   .config-warn{background:rgba(255,176,32,.1);border:1px solid var(--warn);color:var(--warn);border-radius:10px;padding:14px;font-size:13px;line-height:1.5;margin:16px;}
-  .cover{width:44px;height:60px;border-radius:5px;object-fit:cover;background:var(--surface-2);flex-shrink:0;}
+  .cover{width:44px;height:60px;border-radius:5px;object-fit:cover;background:var(--surface-2);flex-shrink:0;box-shadow:0 3px 0 rgba(0,0,0,.4),0 6px 12px rgba(0,0,0,.35),inset 0 1px 0 rgba(255,255,255,.15),inset 0 -2px 4px rgba(0,0,0,.15);transition:transform .08s ease,box-shadow .08s ease;}
   .cover.square{width:60px;height:60px;}
+  .item-row:active .cover,.grid-item:active .cover,.cover-tap:active .cover{transform:translateY(2px);box-shadow:0 1px 0 rgba(0,0,0,.4),inset 0 3px 6px rgba(0,0,0,.45);}
   .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(100px,1fr));gap:14px;}
   .grid-item{cursor:pointer;}
   .grid-item .cover{width:100%;height:auto;aspect-ratio:2/3;}
   .grid-item .cover.square{aspect-ratio:1/1;}
-  .grid-item .grid-placeholder{width:100%;aspect-ratio:2/3;border-radius:5px;background:var(--surface-2);display:flex;align-items:center;justify-content:center;color:var(--text-dim);}
+  .grid-item .grid-placeholder{width:100%;aspect-ratio:2/3;border-radius:5px;background:var(--surface-2);display:flex;align-items:center;justify-content:center;color:var(--text-dim);box-shadow:0 3px 0 rgba(0,0,0,.4),0 6px 12px rgba(0,0,0,.35),inset 0 1px 0 rgba(255,255,255,.1),inset 0 -2px 4px rgba(0,0,0,.15);transition:transform .08s ease,box-shadow .08s ease;}
   .grid-item .grid-placeholder.square{aspect-ratio:1/1;}
+  .grid-item:active .grid-placeholder{transform:translateY(2px);box-shadow:0 1px 0 rgba(0,0,0,.4),inset 0 3px 6px rgba(0,0,0,.45);}
   .grid-item .name{font-size:12px;font-weight:500;margin-top:6px;line-height:1.3;overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;}
   .grid-item .checkbox-overlay{position:absolute;top:6px;left:6px;width:18px;height:18px;margin:0;z-index:1;}
   .grid-item-wrap{position:relative;}
@@ -2196,7 +2198,7 @@ function openItem(id){
     <button class="link" onclick="state.openItemId=null;renderTab()">&larr; Wróć do listy</button>
     <div class="card" style="margin-top:12px;">
       ${item.cover_url ? `
-        <div style="text-align:center;margin-bottom:2px;cursor:pointer;" onclick="showCoverLightbox('${item.id}')" title="Kliknij, żeby powiększyć">
+        <div class="cover-tap" style="text-align:center;margin-bottom:2px;cursor:pointer;" onclick="showCoverLightbox('${item.id}')" title="Kliknij, żeby powiększyć">
           ${coverImg(item.cover_url, 100, item.type)}
         </div>
         <div style="text-align:center;color:var(--text-dim);font-size:11px;margin-bottom:14px;">kliknij okładkę, aby powiększyć &middot; <a href="#" onclick="event.stopPropagation();removeSavedCover('${item.id}');return false;" style="color:var(--text-dim);text-decoration:underline;">usuń okładkę</a></div>
