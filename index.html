@@ -796,11 +796,18 @@ async function logout(){
 let html5Qr = null;
 let scannerStarting = null;
 
+// Na kompie (bez dotyku, z myszką) nie ma sensu kamera — blokujemy ją całkowicie
+// i zostawiamy tylko skaner USB/BT oraz ręczne wpisywanie kodu.
+function isDesktopDevice(){
+  return !window.matchMedia('(pointer: coarse)').matches && navigator.maxTouchPoints === 0;
+}
+
 function renderScan(main){
   if (state.lookup){
     renderAddForm(main);
     return;
   }
+  const desktop = isDesktopDevice();
   // Kamera na telefonie (zwłaszcza iOS) wymaga, żeby jej uruchomienie było bezpośrednią
   // reakcją na dotknięcie ekranu — nie da się jej auto-odpalić zaraz po wejściu na zakładkę.
   main.innerHTML = `
@@ -809,10 +816,12 @@ function renderScan(main){
       <button class="${state.addTarget==='wishlist'?'active':''}" onclick="setAddTarget('wishlist')">Na listę życzeń</button>
     </div>
     ${hwScanInputHtml('hw-scan-add')}
+    ${desktop ? '' : `
     <div class="card" style="text-align:center;display:flex;flex-direction:column;justify-content:center;align-items:center;min-height:40vh;">
       <div class="scan-hint" style="margin-bottom:20px;">Albo dotknij, żeby uruchomić kamerę</div>
       <button class="btn" style="max-width:280px;padding:32px;font-size:24px;letter-spacing:1px;" onclick="beginScan()">SKANUJ</button>
     </div>
+    `}
     <div style="margin-top:14px;">
       <button class="btn secondary" onclick="manualBarcode()">Wpisz kod ręcznie</button>
       <button class="btn secondary" style="margin-top:8px;" onclick="skipBarcode()">Dodaj bez kodu</button>
@@ -841,6 +850,7 @@ function toggleLoanBatchScanMode(on){
 }
 
 function beginScan(){
+  if (isDesktopDevice()) return;
   const main = document.getElementById('main');
   main.innerHTML = `
     <div class="scan-frame">
@@ -859,6 +869,7 @@ function beginScan(){
 }
 
 function startScanner(onDecode){
+  if (isDesktopDevice()) return null;
   onDecode = onDecode || onBarcode;
   if (state.scannerRunning || scannerStarting) return scannerStarting;
   html5Qr = new Html5Qrcode("reader");
@@ -1789,7 +1800,7 @@ async function saveItem(){
   setLookup(null);
   toast(wasEditing ? 'Zapisano zmiany' : 'Dodano do kolekcji');
   render();
-  if (!wasEditing && state.batchScanMode && state.tab === 'scan') beginScan();
+  if (!wasEditing && state.batchScanMode && state.tab === 'scan' && !isDesktopDevice()) beginScan();
 }
 
 // ---------------- KOLEKCJA TAB ----------------
@@ -2434,7 +2445,7 @@ function renderLoans(main){
     return;
   }
   const backLink = state.cameFromStats ? `<button class="link" style="display:block;margin-bottom:12px;" onclick="backToStats()">&larr; Wróć do statystyk</button>` : '';
-  const scanBtn = `${backLink}${hwScanInputHtml('hw-scan-loan', 'Zeskanuj kod, żeby oznaczyć zwrot…')}<button class="btn secondary" style="margin-bottom:12px;display:flex;align-items:center;justify-content:center;gap:8px;" onclick="startLoanScan()">${icon('scan')} Albo użyj kamery</button>`;
+  const scanBtn = `${backLink}${hwScanInputHtml('hw-scan-loan', 'Zeskanuj kod, żeby oznaczyć zwrot…')}${isDesktopDevice() ? '' : `<button class="btn secondary" style="margin-bottom:12px;display:flex;align-items:center;justify-content:center;gap:8px;" onclick="startLoanScan()">${icon('scan')} Albo użyj kamery</button>`}`;
 
   const loanTypeOf = l => (state.items.find(i=>i.id===l.item_id) || {}).type;
   const loanCounts = {
@@ -2657,6 +2668,7 @@ async function bulkReturnLoans(){
 }
 
 function startLoanScan(){
+  if (isDesktopDevice()) return;
   state.loanScanning = true;
   renderTab();
 }
