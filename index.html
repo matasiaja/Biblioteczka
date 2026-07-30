@@ -690,7 +690,26 @@ function render(){
 function navBtn(tab,label){
   const active = state.tab===tab ? 'active' : '';
   const iconName = tab==='scan'?'scan':tab==='list'?'list':tab==='loans'?'loans':'settings';
-  return `<button class="${active}" onclick="setTab('${tab}')">${icon(iconName)}<span>${label}</span></button>`;
+  const action = tab === 'list' ? 'goToCollectionHome()' : `setTab('${tab}')`;
+  return `<button class="${active}" onclick="${action}">${icon(iconName)}<span>${label}</span></button>`;
+}
+
+// Kliknięcie "Kolekcja" w dolnej nawigacji ma zawsze pokazywać całą kolekcję od zera —
+// bez filtrów pozostałych z poprzedniej wizyty (Lista życzeń, konkretny typ, sortowanie itp.),
+// posortowaną A-Z po tytule. Kafelki statystyk (goToStat) celowo skaczą do konkretnego
+// filtra i nie korzystają z tej funkcji.
+function goToCollectionHome(){
+  state.listView = 'owned';
+  localStorage.setItem('bib_list_view', 'owned');
+  state.typeFilter = 'all';
+  localStorage.setItem('bib_type_filter', 'all');
+  state.missingFilter = 'none';
+  localStorage.setItem('bib_missing_filter', 'none');
+  state.sortBy = 'title';
+  localStorage.setItem('bib_sort', 'title');
+  state.sortDir = 'asc';
+  localStorage.setItem('bib_sort_dir', 'asc');
+  setTab('list');
 }
 
 async function setTab(tab){
