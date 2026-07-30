@@ -1484,6 +1484,7 @@ function renderAddForm(main){
         <option value="movie" ${l.type==='movie'?'selected':''}>Film</option>
         <option value="music" ${l.type==='music'?'selected':''}>Muzyka</option>
       </select>
+      ${l.type === 'book' ? renderBookSearchBox(l) : ''}
       ${l.type === 'movie' ? renderOmdbSearchBox(l) : ''}
       ${l.type === 'movie' ? renderTmdbSearchBox(l) : ''}
       ${l.type === 'music' ? renderMusicBrainzSearchBox(l) : ''}
@@ -1544,6 +1545,73 @@ async function searchOmdbTitles(query){
     if (data.Response === 'True') return data.Search || [];
   } catch(e){ /* brak sieci */ }
   return [];
+}
+
+function renderBookSearchBox(l){
+  return `
+    <div class="card" style="background:var(--surface-2);margin:0 0 14px;padding:12px;">
+      <label>Znajdź książkę po tytule / autorze (Open Library)</label>
+      <input id="book-search-title" value="${escapeHtml(l.title||'')}" placeholder="Tytuł książki">
+      <div class="row">
+        <input id="book-search-author" value="${escapeHtml(l.creator||'')}" placeholder="Autor (opcjonalnie)">
+        <button class="btn small secondary" style="flex:0 0 auto;" onclick="doBookSearch()">Szukaj</button>
+      </div>
+      <div id="book-search-results"></div>
+    </div>
+  `;
+}
+
+let bookSearchResults = [];
+
+async function searchOpenLibraryBooks(title, author){
+  if (!title && !author) return [];
+  const params = new URLSearchParams();
+  if (title) params.set('title', title);
+  if (author) params.set('author', author);
+  params.set('limit', '8');
+  params.set('fields', 'key,title,author_name,first_publish_year,cover_i,isbn,publisher');
+  try {
+    const res = await fetch(`https://openlibrary.org/search.json?${params.toString()}`);
+    const data = await res.json();
+    return data.docs || [];
+  } catch(e){ /* brak sieci */ }
+  return [];
+}
+
+async function doBookSearch(){
+  const title = document.getElementById('book-search-title').value.trim();
+  const author = document.getElementById('book-search-author').value.trim();
+  const box = document.getElementById('book-search-results');
+  if (!title && !author) return;
+  box.innerHTML = `<div class="meta">Szukam…</div>`;
+  const results = await searchOpenLibraryBooks(title, author);
+  bookSearchResults = results;
+  if (!results.length){
+    box.innerHTML = `<div class="meta">Brak wyników — wpisz dane ręcznie poniżej.</div>`;
+    return;
+  }
+  box.innerHTML = results.slice(0, 8).map((r, i) => `
+    <div class="item-row" onclick="selectOpenLibraryBook(${i})">
+      ${r.cover_i ? `<img src="https://covers.openlibrary.org/b/id/${r.cover_i}-S.jpg" alt="" class="cover">` : `<div class="cover"></div>`}
+      <div style="flex:1;">
+        <div class="name">${escapeHtml(r.title)}</div>
+        <div class="meta">${escapeHtml((r.author_name||[]).join(', '))}${r.first_publish_year ? ' · ' + r.first_publish_year : ''}</div>
+      </div>
+    </div>
+  `).join('');
+}
+
+function selectOpenLibraryBook(i){
+  const r = bookSearchResults[i];
+  if (!r) return;
+  state.lookup.title = r.title || state.lookup.title;
+  state.lookup.creator = (r.author_name||[]).join(', ') || state.lookup.creator;
+  state.lookup.year = r.first_publish_year ? String(r.first_publish_year) : state.lookup.year;
+  state.lookup.cover_url = r.cover_i ? `https://covers.openlibrary.org/b/id/${r.cover_i}-M.jpg` : state.lookup.cover_url;
+  if (r.publisher && r.publisher[0]) state.lookup.publisher = r.publisher[0];
+  saveDraft();
+  toast('Uzupełniono z Open Library: ' + (r.title||''));
+  render();
 }
 
 async function doOmdbSearch(){
