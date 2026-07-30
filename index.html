@@ -95,6 +95,8 @@
   .toast{position:fixed;bottom:90px;left:50%;transform:translateX(-50%);background:var(--surface-2);border:1px solid var(--border);padding:10px 16px;border-radius:10px;font-size:13px;z-index:50;box-shadow:0 4px 20px rgba(0,0,0,.4);max-width:90%;text-align:center;}
   .link{color:var(--accent);background:none;border:none;font-family:inherit;font-size:13px;cursor:pointer;padding:0;}
   .section-title{font-size:12px;color:var(--text-dim);text-transform:uppercase;letter-spacing:.6px;font-family:'IBM Plex Mono',monospace;margin:4px 0 10px;}
+  .attr-link{cursor:pointer;text-decoration:underline;text-decoration-style:dotted;text-underline-offset:2px;text-decoration-color:currentColor;opacity:.9;}
+  .attr-link:hover{color:var(--accent);opacity:1;}
   .config-warn{background:rgba(255,176,32,.1);border:1px solid var(--warn);color:var(--warn);border-radius:10px;padding:14px;font-size:13px;line-height:1.5;margin:16px;}
   .cover{width:44px;height:60px;border-radius:5px;object-fit:cover;background:var(--surface-2);flex-shrink:0;box-shadow:0 3px 0 rgba(0,0,0,.4),0 6px 12px rgba(0,0,0,.35),inset 0 1px 0 rgba(255,255,255,.15),inset 0 -2px 4px rgba(0,0,0,.15);transition:transform .08s ease,box-shadow .08s ease;}
   .cover.square{width:60px;height:60px;}
@@ -147,6 +149,7 @@ const YEAR_LABELS = { book: 'Rok wydania', movie: 'Rok premiery', music: 'Rok wy
 const CONSUMED_LABELS = { book: 'Przeczytane', movie: 'Obejrzane', music: 'Odsłuchane' };
 const TO_CONSUME_LABELS = { book: 'Do przeczytania', movie: 'Do obejrzenia', music: 'Do odsłuchania' };
 let state = {
+  attrFilter: null,
   tab: localStorage.getItem('bib_tab') || 'scan',
   typeFilter: localStorage.getItem('bib_type_filter') || 'all',
   sortBy: localStorage.getItem('bib_sort') || 'title',
@@ -248,6 +251,11 @@ window.addEventListener('popstate', function(){
   }
   if (state.openItemId){
     state.openItemId = null;
+    renderTab();
+    return;
+  }
+  if (state.attrFilter){
+    state.attrFilter = null;
     renderTab();
     return;
   }
@@ -788,6 +796,7 @@ function backToStats(){
 function renderTab(){
   const main = document.getElementById('main');
   if (state.lookup && state.lookup.editingId){ renderAddForm(main); return; }
+  if (state.attrFilter){ renderAttrFilter(main); return; }
   if (state.searchMode){ renderSearch(main); return; }
   if (state.tab==='scan') renderScan(main);
   else if (state.tab==='list') renderList(main);
@@ -1825,17 +1834,19 @@ async function saveItem(){
       return;
     }
   }
-  const { error } = l.editingId
-    ? await sb.from('items').update(payload).eq('id', l.editingId)
-    : await sb.from('items').insert(payload);
+  const { data, error } = l.editingId
+    ? await sb.from('items').update(payload).eq('id', l.editingId).select('id').single()
+    : await sb.from('items').insert(payload).select('id').single();
   if (error){ toast('Błąd zapisu: ' + error.message); return; }
   await loadAll();
   if (payload.watched) await renumberQueue();
   const wasEditing = l.editingId;
+  const savedId = l.editingId || (data && data.id);
   setLookup(null);
   toast(wasEditing ? 'Zapisano zmiany' : 'Dodano do kolekcji');
   render();
   if (!wasEditing && state.batchScanMode && state.tab === 'scan' && !isDesktopDevice()) beginScan();
+  else if (savedId) openItem(savedId);
 }
 
 // ---------------- KOLEKCJA TAB ----------------
@@ -2108,6 +2119,62 @@ function sortByField(list, getItem){
   });
 }
 
+// ---------------- FILTR PO POLU (klikalne pola na karcie pozycji) ----------------
+function filterByAttrEl(el){
+  filterByAttr(el.dataset.field, el.dataset.value);
+}
+
+function filterByAttr(field, value){
+  state.openItemId = null;
+  state.attrFilter = { field, value };
+  window.history.pushState({ view: 'attrFilter' }, '');
+  render();
+}
+
+function closeAttrFilter(){
+  state.attrFilter = null;
+  renderTab();
+}
+
+function attrFilterLabel(field, value){
+  if (field === 'type') return TYPE_LABELS[value] || value;
+  if (field === 'year') return String(value);
+  if (field === 'creator') return value;
+  if (field === 'format') return value;
+  return String(value);
+}
+
+function attrFieldTitle(field){
+  return field === 'type' ? 'Rodzaj' : field === 'year' ? 'Rok' : field === 'format' ? 'Format' : field === 'creator' ? 'Autor / reżyser / artysta' : field;
+}
+
+function renderAttrFilter(main){
+  const { field, value } = state.attrFilter;
+  const matches = sortByField(state.items.filter(i => {
+    if (field === 'year') return Number(i.year) === Number(value);
+    if (field === 'type') return i.type === value;
+    return (i[field] || '').toString().trim().toLowerCase() === String(value).trim().toLowerCase();
+  }));
+  main.innerHTML = `
+    <button class="link" onclick="closeAttrFilter()">&larr; Wstecz</button>
+    <div class="section-title" style="margin-top:12px;">${attrFieldTitle(field)}: ${escapeHtml(attrFilterLabel(field, value))} (${matches.length})</div>
+    <div class="card">
+      ${matches.length===0 ? `<div class="empty">Brak innych pozycji.</div>` :
+        matches.map(i => {
+          const loan = activeLoanFor(i.id);
+          return `<div class="item-row" onclick="openItem('${i.id}')">
+            ${i.cover_url ? coverImg(i.cover_url, null, i.type) : `<div class="cover${i.type==='music'?' square':''}" style="display:flex;align-items:center;justify-content:center;color:var(--text-dim);">${icon(i.type)}</div>`}
+            <div style="flex:1;min-width:0;">
+              <div class="name">${escapeHtml(i.title)}</div>
+              <div class="meta">${escapeHtml(i.creator||'—')}${i.format?' · '+escapeHtml(i.format):''}${i.year?' · '+i.year:''}${i.status==='wishlist'?' · Lista życzeń':''}</div>
+              ${loan ? `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;"><span class="badge ${isOverdue(loan)?'danger':'warn'}">${loan.direction==='in'?'od':'u'}: ${escapeHtml(loan.borrower_name)}</span></div>` : ''}
+            </div>
+          </div>`;
+        }).join('')}
+    </div>
+  `;
+}
+
 // ---------------- SZUKAJ (dostępne z każdego ekranu) ----------------
 function toggleSearch(){
   state.searchMode = !state.searchMode;
@@ -2236,9 +2303,9 @@ function openItem(id){
         </div>
         <div style="text-align:center;color:var(--text-dim);font-size:11px;margin-bottom:14px;">kliknij okładkę, aby powiększyć &middot; <a href="#" onclick="event.stopPropagation();removeSavedCover('${item.id}');return false;" style="color:var(--text-dim);text-decoration:underline;">usuń okładkę</a></div>
       ` : ''}
-      <div class="section-title">${TYPE_LABELS[item.type]}${item.status==='wishlist' ? ' · Lista życzeń' : item.watched ? ' · '+CONSUMED_LABELS[item.type] : ' · '+TO_CONSUME_LABELS[item.type]}</div>
+      <div class="section-title"><span class="attr-link" data-field="type" data-value="${escapeHtml(item.type)}" onclick="filterByAttrEl(this)">${TYPE_LABELS[item.type]}</span>${item.status==='wishlist' ? ' · Lista życzeń' : item.watched ? ' · '+CONSUMED_LABELS[item.type] : ' · '+TO_CONSUME_LABELS[item.type]}</div>
       <h2 style="margin:0 0 4px;">${escapeHtml(item.title)}</h2>
-      <div class="meta mono" style="color:var(--text-dim);margin-bottom:14px;">${escapeHtml(item.creator||'—')}${item.format?' · '+escapeHtml(item.format):''}${item.year?' · '+item.year:''}${item.publisher?' · '+escapeHtml(item.publisher):''}${item.barcode?' · '+escapeHtml(item.barcode):''}${item.index_number?' · Indeks: '+escapeHtml(item.index_number):''}</div>
+      <div class="meta mono" style="color:var(--text-dim);margin-bottom:14px;">${item.creator ? `<span class="attr-link" data-field="creator" data-value="${escapeHtml(item.creator)}" onclick="filterByAttrEl(this)">${escapeHtml(item.creator)}</span>` : '—'}${item.format?` · <span class="attr-link" data-field="format" data-value="${escapeHtml(item.format)}" onclick="filterByAttrEl(this)">${escapeHtml(item.format)}</span>`:''}${item.year?` · <span class="attr-link" data-field="year" data-value="${item.year}" onclick="filterByAttrEl(this)">${item.year}</span>`:''}${item.publisher?' · '+escapeHtml(item.publisher):''}${item.barcode?' · '+escapeHtml(item.barcode):''}${item.index_number?' · Indeks: '+escapeHtml(item.index_number):''}</div>
       ${item.rating ? `<div style="color:var(--warn);font-size:18px;margin-bottom:10px;">${starsHtml(item.rating)}</div>` : ''}
       ${item.notes ? `<div class="meta" style="white-space:pre-wrap;margin-bottom:14px;">${escapeHtml(item.notes)}</div>` : ''}
       ${item.personal_notes ? `
