@@ -991,9 +991,8 @@ async function onBarcode(code){
   const existing = state.items.find(i => i.barcode === code);
   if (existing){
     toast('Ta pozycja jest już w kolekcji');
-    state.tab = 'list';
-    localStorage.setItem('bib_tab', 'list');
-    render();
+    // Nie przełączamy state.tab na 'list' — user przyszedł tu ze skanowania, więc jeden Backspace
+    // z karty pozycji ma wracać dokładnie tam (a nie na losowy, nieaktualny filtr Kolekcji).
     openItem(existing.id);
     return;
   }
@@ -2210,7 +2209,7 @@ function openItem(id){
   const loan = activeLoanFor(id);
   const main = document.getElementById('main');
   main.innerHTML = `
-    <button class="link" onclick="state.openItemId=null;renderTab()">&larr; Wróć do listy</button>
+    <button class="link" onclick="state.openItemId=null;renderTab()">&larr; ${state.tab==='list' ? 'Wróć do listy' : 'Wstecz'}</button>
     <div class="card" style="margin-top:12px;">
       ${item.cover_url ? `
         <div class="cover-tap" style="text-align:center;margin-bottom:2px;cursor:pointer;" onclick="showCoverLightbox('${item.id}')" title="Kliknij, żeby powiększyć">
@@ -2708,9 +2707,6 @@ async function onLoanBarcode(code){
   const loan = activeLoanFor(item.id);
   if (!loan){
     toast('Ta pozycja nie jest obecnie wypożyczona');
-    state.tab = 'list';
-    localStorage.setItem('bib_tab', 'list');
-    render();
     openItem(item.id);
     return;
   }
