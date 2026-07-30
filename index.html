@@ -1031,8 +1031,13 @@ async function onBarcode(code){
   let guess = { type: 'book', title: '', creator: '', publisher: '', format: '', year: '', cover_url: '' };
   if (isIsbn(code)){
     guess = await lookupBook(code) || guess;
-  } else {
+  } else if (looksLikeBarcode(code)){
     guess = await lookupBarcodeGeneral(code) || guess;
+  } else {
+    // Nie jest to numeryczny kod kreskowy/ISBN (np. ktoś wpisał tu tytuł) — wysłanie tego jako
+    // "barcode:" do MusicBrainz/Discogs potrafi trafić przypadkowym dopasowaniem tekstowym
+    // i podmienić Rodzaj na Muzykę. Zamiast zgadywać, po prostu informujemy, że nic nie znaleziono.
+    toast(`"${code}" nie wygląda na kod kreskowy ani ISBN — nic nie znaleziono. Uzupełnij dane ręcznie poniżej.`);
   }
   setLookup({ barcode: code, ...guess, status: state.addTarget, debugLog: lookupLog, checksumOk: isValidBarcodeChecksum(code) });
   window.history.pushState({ form: 'new' }, '');
@@ -1041,6 +1046,12 @@ async function onBarcode(code){
 
 function isIsbn(code){
   return /^97[89]\d{10}$/.test(code) || /^\d{9}[\dXx]$/.test(code);
+}
+
+// Kody EAN/UPC to wyłącznie cyfry (ew. ze spacjami/myślnikami przy ręcznym wpisywaniu) —
+// odróżnia to prawdziwy kod od wpisanego przez pomyłkę tytułu/tekstu.
+function looksLikeBarcode(code){
+  return /^\d{6,14}$/.test(code.replace(/[\s-]/g, ''));
 }
 
 function stripTrailingPunct(s){
