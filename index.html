@@ -96,6 +96,7 @@
   .link{color:var(--accent);background:none;border:none;font-family:inherit;font-size:13px;cursor:pointer;padding:0;}
   .section-title{font-size:12px;color:var(--text-dim);text-transform:uppercase;letter-spacing:.6px;font-family:'IBM Plex Mono',monospace;margin:4px 0 10px;}
   .attr-link{cursor:pointer;text-decoration:underline;text-decoration-style:dotted;text-underline-offset:2px;text-decoration-color:currentColor;opacity:.9;}
+  .clamp-text.clamped{display:-webkit-box;-webkit-line-clamp:6;-webkit-box-orient:vertical;overflow:hidden;}
   .attr-link:hover{color:var(--accent);opacity:1;}
   .config-warn{background:rgba(255,176,32,.1);border:1px solid var(--warn);color:var(--warn);border-radius:10px;padding:14px;font-size:13px;line-height:1.5;margin:16px;}
   .cover{width:44px;height:60px;border-radius:5px;object-fit:cover;background:var(--surface-2);flex-shrink:0;box-shadow:0 3px 0 rgba(0,0,0,.4),0 6px 12px rgba(0,0,0,.35),inset 0 1px 0 rgba(255,255,255,.15),inset 0 -2px 4px rgba(0,0,0,.15);transition:transform .08s ease,box-shadow .08s ease;}
@@ -283,6 +284,25 @@ function configured(){
 function escapeHtml(s){
   if (s === null || s === undefined) return '';
   return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+let clampIdCounter = 0;
+function clampedTextHtml(text, extraStyle){
+  if (!text) return '';
+  const id = `clamp-${++clampIdCounter}`;
+  const long = text.length > 320;
+  return `
+    <div class="meta clamp-text${long ? ' clamped' : ''}" id="${id}" style="white-space:pre-wrap;${extraStyle||''}">${escapeHtml(text)}</div>
+    ${long ? `<button type="button" class="link" id="${id}-btn" style="margin:2px 0 14px;" onclick="toggleClamp('${id}')">Pokaż więcej ▾</button>` : ''}
+  `;
+}
+
+function toggleClamp(id){
+  const el = document.getElementById(id);
+  const btn = document.getElementById(id + '-btn');
+  if (!el) return;
+  const expanded = el.classList.toggle('clamped') === false;
+  if (btn) btn.textContent = expanded ? 'Zwiń ▴' : 'Pokaż więcej ▾';
 }
 
 function icon(name){
@@ -569,7 +589,7 @@ function openPublicItem(id){
       <h2 style="margin:0 0 4px;">${escapeHtml(item.title)}</h2>
       <div class="meta mono" style="color:var(--text-dim);margin-bottom:14px;">${escapeHtml(item.creator||'—')}${item.format?' · '+escapeHtml(item.format):''}${item.year?' · '+item.year:''}</div>
       ${item.rating ? `<div style="color:var(--warn);font-size:18px;margin-bottom:10px;">${starsHtml(item.rating)}</div>` : ''}
-      ${item.notes ? `<div class="meta" style="white-space:pre-wrap;">${escapeHtml(item.notes)}</div>` : ''}
+      ${item.notes ? clampedTextHtml(item.notes) : ''}
       <button class="btn secondary" style="margin-top:14px;" onclick="document.getElementById('public-item-overlay').remove()">Zamknij</button>
     </div>
   `;
@@ -2386,10 +2406,10 @@ function openItem(id){
       <h2 style="margin:0 0 4px;">${escapeHtml(item.title)}</h2>
       <div class="meta mono" style="color:var(--text-dim);margin-bottom:14px;">${item.creator ? `<span class="attr-link" data-field="creator" data-value="${escapeHtml(item.creator)}" onclick="filterByAttrEl(this)">${escapeHtml(item.creator)}</span>` : '—'}${item.format?` · <span class="attr-link" data-field="format" data-value="${escapeHtml(item.format)}" onclick="filterByAttrEl(this)">${escapeHtml(item.format)}</span>`:''}${item.year?` · <span class="attr-link" data-field="year" data-value="${item.year}" onclick="filterByAttrEl(this)">${item.year}</span>`:''}${item.publisher?' · '+escapeHtml(item.publisher):''}${item.barcode?' · '+escapeHtml(item.barcode):''}${item.index_number?' · Indeks: '+escapeHtml(item.index_number):''}</div>
       ${item.rating ? `<div style="color:var(--warn);font-size:18px;margin-bottom:10px;">${starsHtml(item.rating)}</div>` : ''}
-      ${item.notes ? `<div class="meta" style="white-space:pre-wrap;margin-bottom:14px;">${escapeHtml(item.notes)}</div>` : ''}
+      ${item.notes ? clampedTextHtml(item.notes, 'margin-bottom:14px;') : ''}
       ${item.personal_notes ? `
         <div class="section-title" style="margin-top:4px;">Notatki</div>
-        <div class="meta" style="white-space:pre-wrap;margin-bottom:14px;">${escapeHtml(item.personal_notes)}</div>
+        ${clampedTextHtml(item.personal_notes, 'margin-bottom:14px;')}
       ` : ''}
       ${item.status!=='wishlist' ? `
         <button class="btn ${item.watched ? 'secondary' : ''}" style="margin-bottom:10px;" onclick="toggleWatched('${item.id}')">${item.watched ? `Cofnij: ${TO_CONSUME_LABELS[item.type]}` : `Oznacz: ${CONSUMED_LABELS[item.type]}`}</button>
