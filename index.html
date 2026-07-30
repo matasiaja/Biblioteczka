@@ -226,6 +226,18 @@ function ensureNavFoundation(){
   window.history.pushState({ tab: state.tab, _foundation: true }, '', '#' + state.tab);
 }
 
+// Backspace poza polem tekstowym działa jak fizyczny/systemowy przycisk Wstecz —
+// przydatne na komputerze, gdzie nie ma go fizycznie. Ten sam mechanizm (history.back()),
+// więc cofa dokładnie jeden poziom zgodnie z powyższą logiką nawigacji.
+document.addEventListener('keydown', function(e){
+  if (e.key !== 'Backspace') return;
+  const tag = document.activeElement ? document.activeElement.tagName.toLowerCase() : '';
+  const editable = document.activeElement && document.activeElement.isContentEditable;
+  if (tag === 'input' || tag === 'textarea' || tag === 'select' || editable) return;
+  e.preventDefault();
+  window.history.back();
+});
+
 window.addEventListener('popstate', function(){
   if (!session) return;
   if (state.lookup){
@@ -644,7 +656,7 @@ function render(){
   const showAlert = state.loanAlertBannerEnabled && !state.dismissedLoanAlert && state.tab !== 'loans' && (overdue.length || dueSoon.length);
   app.innerHTML = `
     <header class="topbar">
-      <div style="display:flex;align-items:center;gap:10px;">
+      <div style="display:flex;align-items:center;gap:10px;cursor:pointer;" onclick="setTab('scan')" title="Wróć do skanowania">
         <img src="logo.svg" alt="Biblioteczka" style="width:32px;height:32px;border-radius:8px;">
         <div><h1>Biblioteczka</h1><div class="sub">${escapeHtml(session.user.email)}</div></div>
       </div>
