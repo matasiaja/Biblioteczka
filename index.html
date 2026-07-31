@@ -959,7 +959,7 @@ function renderScan(main){
       <button class="${state.addTarget==='wishlist'?'active':''}" onclick="setAddTarget('wishlist')">Na listę życzeń</button>
     </div>
     ${hwScanInputHtml('hw-scan-add')}
-    <button class="btn ${state.checkMode ? '' : 'secondary'}" style="margin-top:10px;display:flex;align-items:center;justify-content:center;gap:8px;" onclick="toggleCheckMode()" title="Po zeskanowaniu istniejącej pozycji karta pokazuje się na 3 sekundy, po czym appka sama wraca do skanowania">
+    <button class="btn ${state.checkMode ? '' : 'secondary'}" style="margin-top:10px;display:flex;align-items:center;justify-content:center;gap:8px;" onclick="toggleCheckMode()" title="Po zeskanowaniu istniejącej pozycji karta pokazuje się na 1,5 sekundy, po czym appka sama wraca do skanowania">
       ${state.checkMode ? '✓ Sprawdź: WŁĄCZONE' : 'Sprawdź: wyłączone'}
     </button>
     ${desktop ? '' : `
@@ -991,7 +991,7 @@ function toggleBatchScanMode(on){
 }
 
 // "Sprawdź": po zeskanowaniu pozycji, która już jest w kolekcji, karta pokazuje się
-// przez 3s i appka sama wraca do skanowania — do szybkiego sprawdzania wielu kodów pod rząd
+// przez 1,5s i appka sama wraca do skanowania — do szybkiego sprawdzania wielu kodów pod rząd
 // bez ręcznego wracania po każdym. checkModeTimer trzyma jeden wspólny timer, więc kolejny
 // skan w trakcie odliczania po prostu je resetuje zamiast się nakładać.
 let checkModeTimer = null;
@@ -1140,7 +1140,7 @@ async function onBarcode(code){
       const targetId = existing.id;
       checkModeTimer = setTimeout(() => {
         if (state.checkMode && state.openItemId === targetId) setTab('scan');
-      }, 3000);
+      }, 1500);
     }
     return;
   }
