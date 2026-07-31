@@ -75,6 +75,10 @@
   .item-row:last-child{border-bottom:none;}
   .item-row .name{font-weight:500;font-size:14px;}
   .item-row .meta{font-size:11px;color:var(--text-dim);font-family:'IBM Plex Mono',monospace;margin-top:2px;}
+  .row-title{flex:1;min-width:0;}
+  .row-col-check{display:contents;}
+  .row-col{display:none;}
+  .item-row-header{display:none;}
   .empty{text-align:center;color:var(--text-dim);padding:40px 20px;font-size:13px;}
   .empty svg{width:40px;height:40px;opacity:.4;margin-bottom:10px;}
   .tabs{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px;}
@@ -122,6 +126,7 @@
   .stat-group-label:first-child{margin-top:0;}
   .sidebar{display:none;}
   .item-detail-card{display:flex;flex-direction:column;}
+  .record-fields{display:none;}
 
   /* ---------------- DESKTOP (mysz/trackpad, szeroki ekran) ----------------
      Układ jak w systemie bibliotecznym: stały panel nawigacji po lewej,
@@ -146,10 +151,28 @@
     .sidebar-nav button{flex-direction:row;justify-content:flex-start;align-items:center;gap:13px;padding:12px 14px;font-size:14px;width:100%;text-align:left;}
     .sidebar-nav button svg{width:19px;height:19px;}
     .grid{grid-template-columns:repeat(auto-fill,minmax(168px,1fr));gap:24px;}
-    .item-row .cover{width:56px;height:76px;}
+    /* Widok listy jako prawdziwa tabela katalogowa: kolumny Okładka / Tytuł-Autor /
+       Rodzaj / Format / Rok / Status, z wierszem nagłówka nad danymi. Ograniczone do
+       .catalog-row — .item-row samo w sobie jest używane też w wielu innych, niezwiązanych
+       miejscach (wyniki wyszukiwania, kolejka, wypożyczenia...), których nie chcemy dotykać. */
+    .catalog-row{display:grid;grid-template-columns:22px 56px 1fr 100px 120px 64px 150px;gap:16px;align-items:center;}
+    .item-row.catalog-row{padding:10px 8px;border-radius:8px;}
+    .item-row.catalog-row:hover{background:var(--surface-2);}
+    .item-row-header{padding:0 8px 10px;margin-bottom:2px;border-bottom:1px solid var(--border);font-size:11px;text-transform:uppercase;letter-spacing:.6px;color:var(--text-dim);font-family:'IBM Plex Mono',monospace;cursor:default;}
+    .item-row.catalog-row .cover{width:56px;height:76px;}
+    .row-col-check{display:flex;align-items:center;justify-content:center;}
+    .row-col{display:flex;align-items:center;font-size:12px;color:var(--text-dim);font-family:'IBM Plex Mono',monospace;}
+    .row-col-status-mobile{display:none;}
     .item-detail-card{flex-direction:row;gap:36px;align-items:flex-start;max-width:900px;}
     .item-detail-card .item-detail-cover{flex:0 0 auto;}
     .item-detail-card .item-detail-body{flex:1;min-width:0;}
+    /* Karta pozycji jako rekord biblioteczny: etykietowane pola zamiast jednej linijki tekstu. */
+    .item-detail-meta-compact{display:none;}
+    .record-fields{display:block;margin:0 0 18px;border:1px solid var(--border);border-radius:10px;overflow:hidden;}
+    .record-row{display:grid;grid-template-columns:150px 1fr;border-bottom:1px solid var(--border);}
+    .record-row:last-child{border-bottom:none;}
+    .record-row dt{margin:0;padding:9px 14px;background:var(--surface-2);font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--text-dim);font-family:'IBM Plex Mono',monospace;display:flex;align-items:center;}
+    .record-row dd{margin:0;padding:9px 14px;font-size:13px;display:flex;align-items:center;}
   }
 </style>
 </head>
@@ -2132,17 +2155,34 @@ function renderList(main){
         </div>
       ` : `
         <div class="card">
+          <div class="item-row item-row-header catalog-row">
+            <div class="row-col-check"></div>
+            <div></div>
+            <div class="row-title">Tytuł / Autor</div>
+            <div class="row-col row-col-type">Rodzaj</div>
+            <div class="row-col row-col-format">Format</div>
+            <div class="row-col row-col-year">Rok</div>
+            <div class="row-col row-col-status">Status</div>
+          </div>
           ${filtered.map(i=>{
             const loan = activeLoanFor(i.id);
             const checked = state.selectedIds.includes(i.id);
-            return `<div class="item-row" onclick="${state.selectMode ? `toggleSelect('${i.id}')` : `openItem('${i.id}')`}">
-              ${state.selectMode ? `<input type="checkbox" ${checked?'checked':''} onclick="event.stopPropagation();toggleSelect('${i.id}')" style="width:18px;height:18px;flex-shrink:0;margin:0;">` : ''}
+            const statusCell = loan
+              ? `<span class="badge ${isOverdue(loan)?'danger':'warn'}">${loan.direction==='in'?'Pożyczone od':'Wypożyczone'}: ${escapeHtml(loan.borrower_name)}</span>`
+              : i.watched ? `<span class="badge ok">${CONSUMED_LABELS[i.type]}</span>`
+              : `<span class="badge ok">Dostępne</span>`;
+            return `<div class="item-row catalog-row" onclick="${state.selectMode ? `toggleSelect('${i.id}')` : `openItem('${i.id}')`}">
+              <div class="row-col-check">${state.selectMode ? `<input type="checkbox" ${checked?'checked':''} onclick="event.stopPropagation();toggleSelect('${i.id}')" style="width:18px;height:18px;flex-shrink:0;margin:0;">` : ''}</div>
               ${i.cover_url ? coverImg(i.cover_url, null, i.type) : `<div class="cover${i.type==='music'?' square':''}" style="display:flex;align-items:center;justify-content:center;color:var(--text-dim);">${icon(i.type)}</div>`}
-              <div style="flex:1;min-width:0;">
+              <div class="row-title">
                 <div class="name">${escapeHtml(i.title)}</div>
                 <div class="meta">${escapeHtml(i.creator||'—')}${i.format?' · '+escapeHtml(i.format):''}${i.year?' · '+i.year:''}${i.rating?' · '+starsHtml(i.rating):''}</div>
-                ${loan ? `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;"><span class="badge ${isOverdue(loan)?'danger':'warn'}">${loan.direction==='in'?'od':'u'}: ${escapeHtml(loan.borrower_name)}</span><span class="badge accent">${isOverdue(loan)?loanDaysOverdue(loan)+'d po terminie':loanDaysLeft(loan)+'d do zwrotu'}</span></div>` : ''}
+                ${loan ? `<div class="row-col-status-mobile" style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;"><span class="badge ${isOverdue(loan)?'danger':'warn'}">${loan.direction==='in'?'od':'u'}: ${escapeHtml(loan.borrower_name)}</span><span class="badge accent">${isOverdue(loan)?loanDaysOverdue(loan)+'d po terminie':loanDaysLeft(loan)+'d do zwrotu'}</span></div>` : ''}
               </div>
+              <div class="row-col row-col-type"><span class="badge accent">${TYPE_LABELS[i.type]}</span></div>
+              <div class="row-col row-col-format mono">${i.format ? escapeHtml(i.format) : '—'}</div>
+              <div class="row-col row-col-year mono">${i.year || '—'}</div>
+              <div class="row-col row-col-status">${statusCell}</div>
             </div>`;
           }).join('')}
         </div>
@@ -2488,7 +2528,15 @@ function openItem(id){
       <div class="item-detail-body">
       <div class="section-title"><span class="attr-link" data-field="type" data-value="${escapeHtml(item.type)}" onclick="filterByAttrEl(this)">${TYPE_LABELS[item.type]}</span>${item.status==='wishlist' ? ' · Lista życzeń' : item.watched ? ' · '+CONSUMED_LABELS[item.type] : ' · '+TO_CONSUME_LABELS[item.type]}</div>
       <h2 style="margin:0 0 4px;">${escapeHtml(item.title)}</h2>
-      <div class="meta mono" style="color:var(--text-dim);margin-bottom:14px;">${item.creator ? `<span class="attr-link" data-field="creator" data-value="${escapeHtml(item.creator)}" onclick="filterByAttrEl(this)">${escapeHtml(item.creator)}</span>` : '—'}${item.format?` · <span class="attr-link" data-field="format" data-value="${escapeHtml(item.format)}" onclick="filterByAttrEl(this)">${escapeHtml(item.format)}</span>`:''}${item.year?` · <span class="attr-link" data-field="year" data-value="${item.year}" onclick="filterByAttrEl(this)">${item.year}</span>`:''}${item.publisher?' · '+escapeHtml(item.publisher):''}${item.barcode?' · '+escapeHtml(item.barcode):''}${item.index_number?' · Indeks: '+escapeHtml(item.index_number):''}</div>
+      <div class="meta mono item-detail-meta-compact" style="color:var(--text-dim);margin-bottom:14px;">${item.creator ? `<span class="attr-link" data-field="creator" data-value="${escapeHtml(item.creator)}" onclick="filterByAttrEl(this)">${escapeHtml(item.creator)}</span>` : '—'}${item.format?` · <span class="attr-link" data-field="format" data-value="${escapeHtml(item.format)}" onclick="filterByAttrEl(this)">${escapeHtml(item.format)}</span>`:''}${item.year?` · <span class="attr-link" data-field="year" data-value="${item.year}" onclick="filterByAttrEl(this)">${item.year}</span>`:''}${item.publisher?' · '+escapeHtml(item.publisher):''}${item.barcode?' · '+escapeHtml(item.barcode):''}${item.index_number?' · Indeks: '+escapeHtml(item.index_number):''}</div>
+      <dl class="record-fields">
+        ${item.creator ? `<div class="record-row"><dt>Autor</dt><dd><span class="attr-link" data-field="creator" data-value="${escapeHtml(item.creator)}" onclick="filterByAttrEl(this)">${escapeHtml(item.creator)}</span></dd></div>` : ''}
+        ${item.publisher ? `<div class="record-row"><dt>Wydawca</dt><dd>${escapeHtml(item.publisher)}</dd></div>` : ''}
+        ${item.year ? `<div class="record-row"><dt>Rok wydania</dt><dd><span class="attr-link" data-field="year" data-value="${item.year}" onclick="filterByAttrEl(this)">${item.year}</span></dd></div>` : ''}
+        ${item.format ? `<div class="record-row"><dt>Format</dt><dd><span class="attr-link" data-field="format" data-value="${escapeHtml(item.format)}" onclick="filterByAttrEl(this)">${escapeHtml(item.format)}</span></dd></div>` : ''}
+        ${item.barcode ? `<div class="record-row"><dt>Kod kreskowy</dt><dd class="mono">${escapeHtml(item.barcode)}</dd></div>` : ''}
+        ${item.index_number ? `<div class="record-row"><dt>Numer indeksu</dt><dd class="mono">${escapeHtml(item.index_number)}</dd></div>` : ''}
+      </dl>
       ${item.rating ? `<div style="color:var(--warn);font-size:18px;margin-bottom:10px;">${starsHtml(item.rating)}</div>` : ''}
       ${item.notes ? clampedTextHtml(item.notes, 'margin-bottom:14px;') : ''}
       ${item.personal_notes ? `
