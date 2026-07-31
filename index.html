@@ -850,6 +850,7 @@ function goToCollectionHome(){
 
 async function setTab(tab){
   clearTimeout(checkModeTimer);
+  clearTimeout(scanFeedbackTimer);
   await stopScanner();
   state.tab = tab;
   state.scannedBarcode = null;
@@ -1028,6 +1029,24 @@ function toggleBatchScanMode(on){
 // bez ręcznego wracania po każdym. checkModeTimer trzyma jeden wspólny timer, więc kolejny
 // skan w trakcie odliczania po prostu je resetuje zamiast się nakładać.
 let checkModeTimer = null;
+
+// Krótki komunikat na miejscu ekranu skanowania (np. "pozycja jest dostępna, nie była
+// wypożyczona" po zeskanowaniu w trybie Zwrot) zamiast otwierania pełnej karty pozycji —
+// znika sam po 3s i appka wraca do gotowości do skanowania.
+let scanFeedbackTimer = null;
+function showScanFeedback(title, message){
+  clearTimeout(scanFeedbackTimer);
+  const main = document.getElementById('main');
+  main.innerHTML = `
+    <div class="card" style="text-align:center;padding:36px 20px;">
+      <div class="badge ok" style="font-size:14px;padding:8px 16px;margin-bottom:16px;">Dostępne</div>
+      <div style="font-size:17px;font-weight:600;margin-bottom:6px;">${escapeHtml(title)}</div>
+      <div class="meta">${escapeHtml(message)}</div>
+    </div>
+  `;
+  scanFeedbackTimer = setTimeout(() => setTab('scan'), 3000);
+}
+
 function toggleCheckMode(){
   state.checkMode = !state.checkMode;
   localStorage.setItem('bib_check_mode', state.checkMode ? '1' : '0');
@@ -1203,8 +1222,7 @@ async function onBarcode(code){
       if (activeLoan){
         await returnLoan(activeLoan.id, existing.id); // pokazuje kartę pozycji z już zatwierdzonym zwrotem
       } else {
-        toast(`"${existing.title}" nie jest obecnie wypożyczone`);
-        openItem(existing.id);
+        showScanFeedback(existing.title, 'Ta pozycja jest dostępna — nie była wypożyczona.');
       }
     }
     return;
