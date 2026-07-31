@@ -2653,6 +2653,12 @@ function openItem(id){
       </div>
     </div>
   `;
+  // Formularz pożyczenia (mode 'out'/'in') od razu z kursorem w polu "Komu pożyczasz?" —
+  // przydatne zwłaszcza po skanowaniu w trybie "Wypożycz", żeby móc od razu wpisywać imię.
+  if (state.lendMode === 'out' || state.lendMode === 'in'){
+    const borrowerInput = document.getElementById('borrower-name');
+    if (borrowerInput) borrowerInput.focus();
+  }
 }
 
 function showCoverLightbox(itemId){
