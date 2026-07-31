@@ -1032,6 +1032,13 @@ function toggleCheckMode(){
   state.checkMode = !state.checkMode;
   localStorage.setItem('bib_check_mode', state.checkMode ? '1' : '0');
   if (!state.checkMode) clearTimeout(checkModeTimer);
+  // Sprawdź i Wypożycz/Zwrot się wykluczają — włączenie jednego wyłącza drugi tryb,
+  // bo próba połączenia ich naraz (np. auto-powrót ze "Sprawdź" w trakcie wypełniania
+  // formularza pożyczenia) nie ma sensu.
+  else if (state.scanActionMode){
+    state.scanActionMode = null;
+    localStorage.setItem('bib_scan_action_mode', '');
+  }
   renderTab();
 }
 
@@ -1043,6 +1050,11 @@ function toggleCheckMode(){
 function toggleScanActionMode(mode){
   state.scanActionMode = state.scanActionMode === mode ? null : mode;
   localStorage.setItem('bib_scan_action_mode', state.scanActionMode || '');
+  if (state.scanActionMode && state.checkMode){
+    state.checkMode = false;
+    localStorage.setItem('bib_check_mode', '0');
+    clearTimeout(checkModeTimer);
+  }
   renderTab();
 }
 
