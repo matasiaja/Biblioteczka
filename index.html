@@ -2752,6 +2752,10 @@ function onBorrowDateChange(){
 }
 
 function setLendMode(itemId, mode){
+  // openItem() zeruje state.lendMode, gdy state.openItemId różni się od itemId (zabezpieczenie
+  // przed przeniesieniem trybu pożyczenia z poprzednio oglądanej pozycji) — ustawiamy więc
+  // openItemId najpierw, żeby ten warunek był już fałszywy i świeżo ustawiony tryb przetrwał.
+  state.openItemId = itemId;
   state.lendMode = mode;
   openItem(itemId);
 }
