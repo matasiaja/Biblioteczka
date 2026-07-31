@@ -85,6 +85,17 @@
   .tabs button{flex:1;background:linear-gradient(180deg,rgba(190,198,214,.2),rgba(148,163,184,.04)),var(--surface-2);border:1px solid var(--border);color:var(--text);font-weight:600;border-radius:9px;padding:9px;font-family:inherit;font-size:12px;cursor:pointer;box-shadow:0 3px 0 rgba(0,0,0,.4),0 5px 8px rgba(0,0,0,.22),inset 0 1px 0 rgba(255,255,255,.15);transition:transform .08s ease,box-shadow .08s ease,background .15s;}
   .tabs button:active{transform:translateY(2px);box-shadow:0 1px 0 rgba(0,0,0,.4),inset 0 2px 5px rgba(0,0,0,.3);}
   .tabs button.active{background:linear-gradient(180deg,#9c84ff,var(--accent) 55%,var(--accent-dim));border-color:var(--accent);color:#fff;box-shadow:0 1px 0 #3a2a80,inset 0 2px 5px rgba(0,0,0,.35);transform:translateY(1px);}
+  /* Kafelki: tryby skanowania (Sprawdź/Wypożycz/Zwrot) i filtry Kolekcji (Szukaj/Kolekcja/
+     Lista życzeń/Kolejka, typ) — ten sam 3D .btn/.btn.secondary co reszta appki, tylko
+     ułożony w symetryczną siatkę zamiast paska. Na desktopie robią się większe/kwadratowe. */
+  .scan-modes{display:grid;grid-template-columns:1fr 1fr;grid-template-areas:"sprawdz sprawdz" "wypozycz zwrot";gap:8px;margin-top:10px;}
+  .scan-modes button{display:flex;align-items:center;justify-content:center;gap:8px;}
+  .tile-sprawdz{grid-area:sprawdz;}
+  .tile-wypozycz{grid-area:wypozycz;}
+  .tile-zwrot{grid-area:zwrot;}
+  .filter-tiles{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px;}
+  .filter-tile{width:auto;flex:1;display:flex;align-items:center;justify-content:center;gap:6px;padding:9px;font-size:12px;}
+  .filter-tile svg{width:16px;height:16px;flex-shrink:0;}
   /* scanner */
   #reader{width:100%;border-radius:var(--radius);overflow:hidden;background:#000;position:relative;}
   .scan-frame{position:relative;}
@@ -147,9 +158,16 @@
     .sidebar-logo img{width:34px;height:34px;border-radius:8px;flex-shrink:0;}
     .sidebar-logo h1{font-size:16px;margin:0;font-weight:700;letter-spacing:.2px;}
     .sidebar-logo .sub{font-size:11px;color:var(--text-dim);font-family:'IBM Plex Mono',monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:150px;}
-    .sidebar-nav{display:flex;flex-direction:column;gap:6px;}
-    .sidebar-nav button{flex-direction:row;justify-content:flex-start;align-items:center;gap:13px;padding:12px 14px;font-size:14px;width:100%;text-align:left;}
-    .sidebar-nav button svg{width:19px;height:19px;}
+    .sidebar-nav{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+    .sidebar-nav button{flex-direction:column;justify-content:center;align-items:center;gap:9px;padding:20px 8px;font-size:13px;width:100%;text-align:center;aspect-ratio:1/1;}
+    .sidebar-nav button svg{width:24px;height:24px;}
+    /* Kafelki trybów skanowania i filtrów Kolekcji: większe, kwadratowe, w rzędzie/siatce. */
+    .scan-modes{grid-template-columns:repeat(3,1fr);grid-template-areas:"sprawdz wypozycz zwrot";gap:12px;}
+    .scan-modes button{flex-direction:column;padding:22px 10px;gap:10px;font-size:13px;}
+    .scan-modes button svg{width:24px;height:24px;}
+    .filter-tiles{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+    .filter-tile{flex-direction:column;padding:16px 8px;gap:8px;font-size:13px;text-align:center;aspect-ratio:1.4/1;}
+    .filter-tile svg{width:20px;height:20px;}
     .grid{grid-template-columns:repeat(auto-fill,minmax(168px,1fr));gap:24px;}
     /* Widok listy jako prawdziwa tabela katalogowa: kolumny Okładka / Tytuł-Autor /
        Rodzaj / Format / Rok / Status, z wierszem nagłówka nad danymi. Ograniczone do
@@ -182,8 +200,6 @@
     .list-layout{display:flex;gap:32px;align-items:flex-start;}
     .list-filters{flex:0 0 300px;position:sticky;top:20px;}
     .list-results{flex:1;min-width:0;}
-    .list-filters .tabs{flex-direction:column;}
-    .list-filters .tabs button{width:100%;text-align:left;padding:13px 18px;font-size:14px;}
     .record-row dd{margin:0;padding:9px 14px;font-size:13px;display:flex;align-items:center;}
   }
 </style>
@@ -396,7 +412,9 @@ function icon(name){
     movie: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="18" rx="2"/><path d="M7 3v18M17 3v18M2 8h5M2 16h5M17 8h5M17 16h5"/></svg>',
     music: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>',
     search: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>',
-    x: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>'
+    x: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>',
+    check: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>',
+    undo: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5A5.5 5.5 0 0 1 20 14.5v0A5.5 5.5 0 0 1 14.5 20H11"/></svg>'
   };
   return icons[name] || '';
 }
@@ -972,12 +990,10 @@ function renderScan(main){
       <button class="${state.addTarget==='wishlist'?'active':''}" onclick="setAddTarget('wishlist')">Na listę życzeń</button>
     </div>
     ${hwScanInputHtml('hw-scan-add')}
-    <button class="btn ${state.checkMode ? '' : 'secondary'}" style="margin-top:10px;display:flex;align-items:center;justify-content:center;gap:8px;" onclick="toggleCheckMode()" title="Po zeskanowaniu istniejącej pozycji karta pokazuje się na 1,5 sekundy, po czym appka sama wraca do skanowania">
-      ${state.checkMode ? '✓ Sprawdź: WŁĄCZONE' : 'Sprawdź: wyłączone'}
-    </button>
-    <div class="row" style="margin-top:8px;">
-      <button class="btn ${state.scanActionMode==='lend' ? '' : 'secondary'}" onclick="toggleScanActionMode('lend')" title="Zeskanowanie pozycji od razu otwiera formularz wypożyczenia">${state.scanActionMode==='lend' ? '✓ Wypożycz' : 'Wypożycz'}</button>
-      <button class="btn ${state.scanActionMode==='return' ? '' : 'secondary'}" onclick="toggleScanActionMode('return')" title="Zeskanowanie wypożyczonej pozycji od razu oznacza zwrot">${state.scanActionMode==='return' ? '✓ Zwrot' : 'Zwrot'}</button>
+    <div class="scan-modes">
+      <button class="btn tile-sprawdz ${state.checkMode ? '' : 'secondary'}" onclick="toggleCheckMode()" title="Po zeskanowaniu istniejącej pozycji karta pokazuje się na 1,5 sekundy, po czym appka sama wraca do skanowania">${icon('check')}<span>Sprawdź</span></button>
+      <button class="btn tile-wypozycz ${state.scanActionMode==='lend' ? '' : 'secondary'}" onclick="toggleScanActionMode('lend')" title="Zeskanowanie pozycji od razu otwiera formularz wypożyczenia">${icon('loans')}<span>Wypożycz</span></button>
+      <button class="btn tile-zwrot ${state.scanActionMode==='return' ? '' : 'secondary'}" onclick="toggleScanActionMode('return')" title="Zeskanowanie wypożyczonej pozycji od razu oznacza zwrot">${icon('undo')}<span>Zwrot</span></button>
     </div>
     ${desktop ? '' : `
     <div class="card" style="text-align:center;display:flex;flex-direction:column;justify-content:center;align-items:center;min-height:40vh;">
@@ -2169,10 +2185,11 @@ function renderList(main){
           <button class="btn small secondary" style="flex:0 0 auto;" onclick="toggleViewMode()" title="${state.viewMode==='grid' ? 'Widok listy' : 'Widok siatki okładek'}">${state.viewMode==='grid' ? icon('list') : icon('grid')}</button>
           <button class="btn small secondary" style="flex:0 0 auto;" onclick="toggleSelectMode()">${state.selectMode ? 'Gotowe' : 'Zaznacz'}</button>
         </div>
-        <div class="tabs">
-          <button class="${state.listView==='owned'?'active':''}" onclick="setListView('owned')">Kolekcja</button>
-          <button class="${state.listView==='wishlist'?'active':''}" onclick="setListView('wishlist')">Lista życzeń${wishlistCount?` (${wishlistCount})`:''}</button>
-          <button class="${state.listView==='queue'?'active':''}" onclick="setListView('queue')">Kolejka${queueCount?` (${queueCount})`:''}</button>
+        <div class="filter-tiles">
+          <button class="btn secondary filter-tile" onclick="toggleSearch()" title="Szukaj w kolekcji">${icon('search')}<span>Szukaj</span></button>
+          <button class="btn filter-tile ${state.listView==='owned'?'':'secondary'}" onclick="setListView('owned')">${icon('book')}<span>Kolekcja</span></button>
+          <button class="btn filter-tile ${state.listView==='wishlist'?'':'secondary'}" onclick="setListView('wishlist')">${icon('list')}<span>Lista życzeń${wishlistCount?` (${wishlistCount})`:''}</span></button>
+          <button class="btn filter-tile ${state.listView==='queue'?'':'secondary'}" onclick="setListView('queue')">${icon('grid')}<span>Kolejka${queueCount?` (${queueCount})`:''}</span></button>
         </div>
         ${state.selectMode ? `
           <div class="card" style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px;padding:12px;flex-wrap:wrap;">
@@ -2187,8 +2204,8 @@ function renderList(main){
             </div>
           </div>
         ` : ''}
-        <div class="tabs">
-          ${['all','book','movie','music'].map(t=>`<button class="${state.typeFilter===t?'active':''}" onclick="setTypeFilter('${t}')">${t==='all'?'Wszystko':TYPE_LABELS[t]} (${counts[t]})</button>`).join('')}
+        <div class="filter-tiles">
+          ${['all','book','movie','music'].map(t=>`<button class="btn filter-tile ${state.typeFilter===t?'':'secondary'}" onclick="setTypeFilter('${t}')">${icon(t==='all'?'grid':t)}<span>${t==='all'?'Wszystko':TYPE_LABELS[t]} (${counts[t]})</span></button>`).join('')}
         </div>
         ${sortSelect()}
         ${missingSelect()}
