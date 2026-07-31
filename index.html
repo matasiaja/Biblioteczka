@@ -172,6 +172,11 @@
     .record-row{display:grid;grid-template-columns:150px 1fr;border-bottom:1px solid var(--border);}
     .record-row:last-child{border-bottom:none;}
     .record-row dt{margin:0;padding:9px 14px;background:var(--surface-2);font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--text-dim);font-family:'IBM Plex Mono',monospace;display:flex;align-items:center;}
+    /* Filtry/zakładki i pasek narzędzi kolekcji: na szerokim ekranie mają wyglądać jak
+       kompaktowe "chipy" przy lewej krawędzi, a nie rozciągnięte na całą szerokość paski. */
+    .tabs button{flex:0 0 auto;padding:9px 18px;}
+    .list-toolbar{justify-content:flex-start;}
+    .list-toolbar .btn{flex:0 0 auto;width:auto;padding:12px 22px;}
     .record-row dd{margin:0;padding:9px 14px;font-size:13px;display:flex;align-items:center;}
   }
 </style>
@@ -212,6 +217,7 @@ let state = {
   missingFilter: localStorage.getItem('bib_missing_filter') || 'none',
   viewMode: localStorage.getItem('bib_view_mode') || 'list',
   checkMode: localStorage.getItem('bib_check_mode') === '1',
+  scanActionMode: localStorage.getItem('bib_scan_action_mode') || null,
   items: [],
   loans: [],
   scannerRunning: false,
@@ -962,6 +968,10 @@ function renderScan(main){
     <button class="btn ${state.checkMode ? '' : 'secondary'}" style="margin-top:10px;display:flex;align-items:center;justify-content:center;gap:8px;" onclick="toggleCheckMode()" title="Po zeskanowaniu istniejącej pozycji karta pokazuje się na 1,5 sekundy, po czym appka sama wraca do skanowania">
       ${state.checkMode ? '✓ Sprawdź: WŁĄCZONE' : 'Sprawdź: wyłączone'}
     </button>
+    <div class="row" style="margin-top:8px;">
+      <button class="btn ${state.scanActionMode==='lend' ? '' : 'secondary'}" onclick="toggleScanActionMode('lend')" title="Zeskanowanie pozycji od razu otwiera formularz wypożyczenia">${state.scanActionMode==='lend' ? '✓ Wypożycz' : 'Wypożycz'}</button>
+      <button class="btn ${state.scanActionMode==='return' ? '' : 'secondary'}" onclick="toggleScanActionMode('return')" title="Zeskanowanie wypożyczonej pozycji od razu oznacza zwrot">${state.scanActionMode==='return' ? '✓ Zwrot' : 'Zwrot'}</button>
+    </div>
     ${desktop ? '' : `
     <div class="card" style="text-align:center;display:flex;flex-direction:column;justify-content:center;align-items:center;min-height:40vh;">
       <div class="scan-hint" style="margin-bottom:20px;">Albo dotknij, żeby uruchomić kamerę</div>
@@ -999,6 +1009,16 @@ function toggleCheckMode(){
   state.checkMode = !state.checkMode;
   localStorage.setItem('bib_check_mode', state.checkMode ? '1' : '0');
   if (!state.checkMode) clearTimeout(checkModeTimer);
+  renderTab();
+}
+
+// "Wypożycz" / "Zwrot": tryb skanowania, w którym zeskanowany kod od razu wykonuje akcję
+// zamiast tylko otwierać kartę pozycji — "Wypożycz" skacze prosto do formularza pożyczenia,
+// "Zwrot" od razu oznacza aktywne wypożyczenie jako zwrócone. Wzajemnie się wykluczają;
+// kliknięcie aktywnego przycisku wyłącza tryb z powrotem do normalnego skanowania.
+function toggleScanActionMode(mode){
+  state.scanActionMode = state.scanActionMode === mode ? null : mode;
+  localStorage.setItem('bib_scan_action_mode', state.scanActionMode || '');
   renderTab();
 }
 
@@ -1130,6 +1150,29 @@ function logStep(source, status){
 async function onBarcode(code){
   await stopScanner();
   const existing = state.items.find(i => i.barcode === code);
+  if (state.scanActionMode === 'lend' || state.scanActionMode === 'return'){
+    if (!existing){
+      toast('Nie znaleziono tej pozycji w kolekcji — nie można jej wypożyczyć/zwrócić.');
+      return;
+    }
+    const activeLoan = activeLoanFor(existing.id);
+    if (state.scanActionMode === 'lend'){
+      if (activeLoan){
+        toast(`"${existing.title}" jest już wypożyczone`);
+        openItem(existing.id);
+      } else {
+        setLendMode(existing.id, 'out');
+      }
+    } else {
+      if (activeLoan){
+        await returnLoan(activeLoan.id); // returnLoan sam pokazuje toast i zostaje na ekranie skanowania
+      } else {
+        toast(`"${existing.title}" nie jest obecnie wypożyczone`);
+        openItem(existing.id);
+      }
+    }
+    return;
+  }
   if (existing){
     toast('Ta pozycja jest już w kolekcji');
     // Nie przełączamy state.tab na 'list' — user przyszedł tu ze skanowania, więc jeden Backspace
@@ -2111,7 +2154,7 @@ function renderList(main){
   const queueCount = state.items.filter(i=>i.queue_position != null).length;
   main.innerHTML = `
     ${state.cameFromStats ? `<button class="link" style="margin-bottom:12px;" onclick="backToStats()">&larr; Wróć do statystyk</button>` : ''}
-    <div class="row" style="margin-bottom:12px;">
+    <div class="row list-toolbar" style="margin-bottom:12px;">
       <button class="btn secondary" onclick="goAddNew('${state.listView}')">+ Dodaj pozycję</button>
       <button class="btn small secondary" style="flex:0 0 auto;" onclick="toggleViewMode()" title="${state.viewMode==='grid' ? 'Widok listy' : 'Widok siatki okładek'}">${state.viewMode==='grid' ? icon('list') : icon('grid')}</button>
       <button class="btn small secondary" style="flex:0 0 auto;" onclick="toggleSelectMode()">${state.selectMode ? 'Gotowe' : 'Zaznacz'}</button>
