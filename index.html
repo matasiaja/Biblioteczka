@@ -1019,10 +1019,11 @@ function toggleCheckMode(){
   renderTab();
 }
 
-// "Wypożycz" / "Zwrot": tryb skanowania, w którym zeskanowany kod od razu wykonuje akcję
-// zamiast tylko otwierać kartę pozycji — "Wypożycz" skacze prosto do formularza pożyczenia,
-// "Zwrot" od razu oznacza aktywne wypożyczenie jako zwrócone. Wzajemnie się wykluczają;
-// kliknięcie aktywnego przycisku wyłącza tryb z powrotem do normalnego skanowania.
+// "Wypożycz" / "Zwrot": tryb skanowania, w którym zeskanowany kod od razu otwiera kartę
+// pozycji gotową do działania — "Wypożycz" skacze prosto do formularza pożyczenia (wpisujesz
+// tylko komu), "Zwrot" od razu zatwierdza zwrot aktywnego wypożyczenia i pokazuje odświeżoną
+// kartę (już bez wypożyczenia). Wzajemnie się wykluczają; kliknięcie aktywnego przycisku
+// wyłącza tryb z powrotem do normalnego skanowania.
 function toggleScanActionMode(mode){
   state.scanActionMode = state.scanActionMode === mode ? null : mode;
   localStorage.setItem('bib_scan_action_mode', state.scanActionMode || '');
@@ -1172,7 +1173,7 @@ async function onBarcode(code){
       }
     } else {
       if (activeLoan){
-        await returnLoan(activeLoan.id); // returnLoan sam pokazuje toast i zostaje na ekranie skanowania
+        await returnLoan(activeLoan.id, existing.id); // pokazuje kartę pozycji z już zatwierdzonym zwrotem
       } else {
         toast(`"${existing.title}" nie jest obecnie wypożyczone`);
         openItem(existing.id);
@@ -2765,14 +2766,16 @@ async function updateDueDate(loanId, itemId){
   openItem(itemId);
 }
 
-async function returnLoan(loanId){
+// stayOnItemId: gdy podane, po zwrocie zostajemy na karcie tej pozycji (odświeżonej,
+// już bez aktywnego wypożyczenia) zamiast wracać do listy/zakładki, z której przyszliśmy.
+async function returnLoan(loanId, stayOnItemId){
   const loan = state.loans.find(l => l.id === loanId);
   const { error } = await sb.from('loans').update({ returned_at: new Date().toISOString() }).eq('id', loanId);
   if (error){ toast('Błąd: ' + error.message); return; }
   await loadAll();
   state.loanHistory = null;
   toast(loan && loan.direction === 'in' ? 'Oznaczono jako oddane właścicielowi' : 'Oznaczono zwrot');
-  renderTab();
+  if (stayOnItemId) openItem(stayOnItemId); else renderTab();
 }
 
 async function deleteItem(itemId){
