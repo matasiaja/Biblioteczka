@@ -175,8 +175,15 @@
     /* Filtry/zakładki i pasek narzędzi kolekcji: na szerokim ekranie mają wyglądać jak
        kompaktowe "chipy" przy lewej krawędzi, a nie rozciągnięte na całą szerokość paski. */
     .tabs button{flex:0 0 auto;padding:9px 18px;}
-    .list-toolbar{justify-content:flex-start;}
+    .list-toolbar{justify-content:flex-start;flex-wrap:wrap;}
     .list-toolbar .btn{flex:0 0 auto;width:auto;padding:12px 22px;}
+    /* Panel filtrów Kolekcji: stała kolumna po lewej stronie siatki okładek, przyklejona
+       do góry obszaru przewijania (position:sticky), więc nie ucieka razem z okładkami. */
+    .list-layout{display:flex;gap:32px;align-items:flex-start;}
+    .list-filters{flex:0 0 300px;position:sticky;top:20px;}
+    .list-results{flex:1;min-width:0;}
+    .list-filters .tabs{flex-direction:column;}
+    .list-filters .tabs button{width:100%;text-align:left;padding:13px 18px;font-size:14px;}
     .record-row dd{margin:0;padding:9px 14px;font-size:13px;display:flex;align-items:center;}
   }
 </style>
@@ -2154,82 +2161,88 @@ function renderList(main){
   const queueCount = state.items.filter(i=>i.queue_position != null).length;
   main.innerHTML = `
     ${state.cameFromStats ? `<button class="link" style="margin-bottom:12px;" onclick="backToStats()">&larr; Wróć do statystyk</button>` : ''}
-    <div class="row list-toolbar" style="margin-bottom:12px;">
-      <button class="btn secondary" onclick="goAddNew('${state.listView}')">+ Dodaj pozycję</button>
-      <button class="btn small secondary" style="flex:0 0 auto;" onclick="toggleViewMode()" title="${state.viewMode==='grid' ? 'Widok listy' : 'Widok siatki okładek'}">${state.viewMode==='grid' ? icon('list') : icon('grid')}</button>
-      <button class="btn small secondary" style="flex:0 0 auto;" onclick="toggleSelectMode()">${state.selectMode ? 'Gotowe' : 'Zaznacz'}</button>
-    </div>
-    <div class="tabs">
-      <button class="${state.listView==='owned'?'active':''}" onclick="setListView('owned')">Kolekcja</button>
-      <button class="${state.listView==='wishlist'?'active':''}" onclick="setListView('wishlist')">Lista życzeń${wishlistCount?` (${wishlistCount})`:''}</button>
-      <button class="${state.listView==='queue'?'active':''}" onclick="setListView('queue')">Kolejka${queueCount?` (${queueCount})`:''}</button>
-    </div>
-    ${state.selectMode ? `
-      <div class="card" style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px;padding:12px;flex-wrap:wrap;">
-        <span class="meta">Zaznaczono: ${state.selectedIds.length} / ${state.visibleIds.length}</span>
-        <div style="display:flex;gap:8px;flex-wrap:wrap;">
-          <button class="btn small secondary" onclick="selectAllVisible()">Zaznacz wszystko</button>
-          <button class="btn small secondary" onclick="deselectAll()">Odznacz wszystko</button>
-          <button class="btn small secondary" onclick="cancelSelectMode()">Anuluj</button>
-          ${state.listView==='owned' ? `<button class="btn small secondary" onclick="bulkSetWatched(true)" ${state.selectedIds.length===0?'disabled':''}>Oznacz: ${state.typeFilter!=='all' ? CONSUMED_LABELS[state.typeFilter] : 'Obejrzane'}</button>
-          <button class="btn small secondary" onclick="bulkSetWatched(false)" ${state.selectedIds.length===0?'disabled':''}>Cofnij: ${state.typeFilter!=='all' ? CONSUMED_LABELS[state.typeFilter] : 'Obejrzane'}</button>` : ''}
-          <button class="btn small danger" onclick="bulkDeleteItems()" ${state.selectedIds.length===0?'disabled':''}>Usuń zaznaczone</button>
+    <div class="list-layout">
+      <div class="list-filters">
+        <div class="row list-toolbar" style="margin-bottom:12px;">
+          <button class="btn secondary" onclick="goAddNew('${state.listView}')">+ Dodaj pozycję</button>
+          <button class="btn small secondary" style="flex:0 0 auto;" onclick="toggleViewMode()" title="${state.viewMode==='grid' ? 'Widok listy' : 'Widok siatki okładek'}">${state.viewMode==='grid' ? icon('list') : icon('grid')}</button>
+          <button class="btn small secondary" style="flex:0 0 auto;" onclick="toggleSelectMode()">${state.selectMode ? 'Gotowe' : 'Zaznacz'}</button>
         </div>
-      </div>
-    ` : ''}
-    <div class="tabs">
-      ${['all','book','movie','music'].map(t=>`<button class="${state.typeFilter===t?'active':''}" onclick="setTypeFilter('${t}')">${t==='all'?'Wszystko':TYPE_LABELS[t]} (${counts[t]})</button>`).join('')}
-    </div>
-    ${sortSelect()}
-    ${missingSelect()}
-    ${filtered.length===0 ? `<div class="card"><div class="empty">${state.missingFilter==='to_consume' ? 'Wszystko obejrzane/przeczytane/odsłuchane 🎉' : state.missingFilter==='queue' ? 'Kolejka jest pusta — dodaj pozycje z „Do obejrzenia" w szczegółach pozycji.' : state.missingFilter!=='none' ? 'Brak pozycji z tym brakiem — wszystko uzupełnione.' : 'Brak pozycji w tej kategorii.'}</div></div>` :
-      state.viewMode === 'grid' ? `
-        <div class="grid">
-          ${filtered.map(i=>{
-            const checked = state.selectedIds.includes(i.id);
-            return `<div class="grid-item-wrap">
-              ${state.selectMode ? `<input type="checkbox" class="checkbox-overlay" ${checked?'checked':''} onclick="event.stopPropagation();toggleSelect('${i.id}')">` : ''}
-              <div class="grid-item" onclick="${state.selectMode ? `toggleSelect('${i.id}')` : `openItem('${i.id}')`}">
-                ${i.cover_url ? coverImg(i.cover_url, null, i.type) : `<div class="grid-placeholder${i.type==='music'?' square':''}">${icon(i.type)}</div>`}
-                <div class="name">${escapeHtml(i.title)}</div>
-              </div>
-            </div>`;
-          }).join('')}
+        <div class="tabs">
+          <button class="${state.listView==='owned'?'active':''}" onclick="setListView('owned')">Kolekcja</button>
+          <button class="${state.listView==='wishlist'?'active':''}" onclick="setListView('wishlist')">Lista życzeń${wishlistCount?` (${wishlistCount})`:''}</button>
+          <button class="${state.listView==='queue'?'active':''}" onclick="setListView('queue')">Kolejka${queueCount?` (${queueCount})`:''}</button>
         </div>
-      ` : `
-        <div class="card">
-          <div class="item-row item-row-header catalog-row">
-            <div class="row-col-check"></div>
-            <div></div>
-            <div class="row-title">Tytuł / Autor</div>
-            <div class="row-col row-col-type">Rodzaj</div>
-            <div class="row-col row-col-format">Format</div>
-            <div class="row-col row-col-year">Rok</div>
-            <div class="row-col row-col-status">Status</div>
+        ${state.selectMode ? `
+          <div class="card" style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px;padding:12px;flex-wrap:wrap;">
+            <span class="meta">Zaznaczono: ${state.selectedIds.length} / ${state.visibleIds.length}</span>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;">
+              <button class="btn small secondary" onclick="selectAllVisible()">Zaznacz wszystko</button>
+              <button class="btn small secondary" onclick="deselectAll()">Odznacz wszystko</button>
+              <button class="btn small secondary" onclick="cancelSelectMode()">Anuluj</button>
+              ${state.listView==='owned' ? `<button class="btn small secondary" onclick="bulkSetWatched(true)" ${state.selectedIds.length===0?'disabled':''}>Oznacz: ${state.typeFilter!=='all' ? CONSUMED_LABELS[state.typeFilter] : 'Obejrzane'}</button>
+              <button class="btn small secondary" onclick="bulkSetWatched(false)" ${state.selectedIds.length===0?'disabled':''}>Cofnij: ${state.typeFilter!=='all' ? CONSUMED_LABELS[state.typeFilter] : 'Obejrzane'}</button>` : ''}
+              <button class="btn small danger" onclick="bulkDeleteItems()" ${state.selectedIds.length===0?'disabled':''}>Usuń zaznaczone</button>
+            </div>
           </div>
-          ${filtered.map(i=>{
-            const loan = activeLoanFor(i.id);
-            const checked = state.selectedIds.includes(i.id);
-            const statusCell = loan
-              ? `<span class="badge ${isOverdue(loan)?'danger':'warn'}">${loan.direction==='in'?'Pożyczone od':'Wypożyczone'}: ${escapeHtml(loan.borrower_name)}</span>`
-              : i.watched ? `<span class="badge ok">${CONSUMED_LABELS[i.type]}</span>`
-              : `<span class="badge ok">Dostępne</span>`;
-            return `<div class="item-row catalog-row" onclick="${state.selectMode ? `toggleSelect('${i.id}')` : `openItem('${i.id}')`}">
-              <div class="row-col-check">${state.selectMode ? `<input type="checkbox" ${checked?'checked':''} onclick="event.stopPropagation();toggleSelect('${i.id}')" style="width:18px;height:18px;flex-shrink:0;margin:0;">` : ''}</div>
-              ${i.cover_url ? coverImg(i.cover_url, null, i.type) : `<div class="cover${i.type==='music'?' square':''}" style="display:flex;align-items:center;justify-content:center;color:var(--text-dim);">${icon(i.type)}</div>`}
-              <div class="row-title">
-                <div class="name">${escapeHtml(i.title)}</div>
-                <div class="meta">${escapeHtml(i.creator||'—')}${i.format?' · '+escapeHtml(i.format):''}${i.year?' · '+i.year:''}${i.rating?' · '+starsHtml(i.rating):''}</div>
-                ${loan ? `<div class="row-col-status-mobile" style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;"><span class="badge ${isOverdue(loan)?'danger':'warn'}">${loan.direction==='in'?'od':'u'}: ${escapeHtml(loan.borrower_name)}</span><span class="badge accent">${isOverdue(loan)?loanDaysOverdue(loan)+'d po terminie':loanDaysLeft(loan)+'d do zwrotu'}</span></div>` : ''}
-              </div>
-              <div class="row-col row-col-type"><span class="badge accent">${TYPE_LABELS[i.type]}</span></div>
-              <div class="row-col row-col-format mono">${i.format ? escapeHtml(i.format) : '—'}</div>
-              <div class="row-col row-col-year mono">${i.year || '—'}</div>
-              <div class="row-col row-col-status">${statusCell}</div>
-            </div>`;
-          }).join('')}
+        ` : ''}
+        <div class="tabs">
+          ${['all','book','movie','music'].map(t=>`<button class="${state.typeFilter===t?'active':''}" onclick="setTypeFilter('${t}')">${t==='all'?'Wszystko':TYPE_LABELS[t]} (${counts[t]})</button>`).join('')}
         </div>
-      `}
+        ${sortSelect()}
+        ${missingSelect()}
+      </div>
+      <div class="list-results">
+        ${filtered.length===0 ? `<div class="card"><div class="empty">${state.missingFilter==='to_consume' ? 'Wszystko obejrzane/przeczytane/odsłuchane 🎉' : state.missingFilter==='queue' ? 'Kolejka jest pusta — dodaj pozycje z „Do obejrzenia" w szczegółach pozycji.' : state.missingFilter!=='none' ? 'Brak pozycji z tym brakiem — wszystko uzupełnione.' : 'Brak pozycji w tej kategorii.'}</div></div>` :
+          state.viewMode === 'grid' ? `
+            <div class="grid">
+              ${filtered.map(i=>{
+                const checked = state.selectedIds.includes(i.id);
+                return `<div class="grid-item-wrap">
+                  ${state.selectMode ? `<input type="checkbox" class="checkbox-overlay" ${checked?'checked':''} onclick="event.stopPropagation();toggleSelect('${i.id}')">` : ''}
+                  <div class="grid-item" onclick="${state.selectMode ? `toggleSelect('${i.id}')` : `openItem('${i.id}')`}">
+                    ${i.cover_url ? coverImg(i.cover_url, null, i.type) : `<div class="grid-placeholder${i.type==='music'?' square':''}">${icon(i.type)}</div>`}
+                    <div class="name">${escapeHtml(i.title)}</div>
+                  </div>
+                </div>`;
+              }).join('')}
+            </div>
+          ` : `
+            <div class="card">
+              <div class="item-row item-row-header catalog-row">
+                <div class="row-col-check"></div>
+                <div></div>
+                <div class="row-title">Tytuł / Autor</div>
+                <div class="row-col row-col-type">Rodzaj</div>
+                <div class="row-col row-col-format">Format</div>
+                <div class="row-col row-col-year">Rok</div>
+                <div class="row-col row-col-status">Status</div>
+              </div>
+              ${filtered.map(i=>{
+                const loan = activeLoanFor(i.id);
+                const checked = state.selectedIds.includes(i.id);
+                const statusCell = loan
+                  ? `<span class="badge ${isOverdue(loan)?'danger':'warn'}">${loan.direction==='in'?'Pożyczone od':'Wypożyczone'}: ${escapeHtml(loan.borrower_name)}</span>`
+                  : i.watched ? `<span class="badge ok">${CONSUMED_LABELS[i.type]}</span>`
+                  : `<span class="badge ok">Dostępne</span>`;
+                return `<div class="item-row catalog-row" onclick="${state.selectMode ? `toggleSelect('${i.id}')` : `openItem('${i.id}')`}">
+                  <div class="row-col-check">${state.selectMode ? `<input type="checkbox" ${checked?'checked':''} onclick="event.stopPropagation();toggleSelect('${i.id}')" style="width:18px;height:18px;flex-shrink:0;margin:0;">` : ''}</div>
+                  ${i.cover_url ? coverImg(i.cover_url, null, i.type) : `<div class="cover${i.type==='music'?' square':''}" style="display:flex;align-items:center;justify-content:center;color:var(--text-dim);">${icon(i.type)}</div>`}
+                  <div class="row-title">
+                    <div class="name">${escapeHtml(i.title)}</div>
+                    <div class="meta">${escapeHtml(i.creator||'—')}${i.format?' · '+escapeHtml(i.format):''}${i.year?' · '+i.year:''}${i.rating?' · '+starsHtml(i.rating):''}</div>
+                    ${loan ? `<div class="row-col-status-mobile" style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;"><span class="badge ${isOverdue(loan)?'danger':'warn'}">${loan.direction==='in'?'od':'u'}: ${escapeHtml(loan.borrower_name)}</span><span class="badge accent">${isOverdue(loan)?loanDaysOverdue(loan)+'d po terminie':loanDaysLeft(loan)+'d do zwrotu'}</span></div>` : ''}
+                  </div>
+                  <div class="row-col row-col-type"><span class="badge accent">${TYPE_LABELS[i.type]}</span></div>
+                  <div class="row-col row-col-format mono">${i.format ? escapeHtml(i.format) : '—'}</div>
+                  <div class="row-col row-col-year mono">${i.year || '—'}</div>
+                  <div class="row-col row-col-status">${statusCell}</div>
+                </div>`;
+              }).join('')}
+            </div>
+          `}
+      </div>
+    </div>
   `;
 }
 
