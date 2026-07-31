@@ -157,6 +157,7 @@ let state = {
   sortDir: localStorage.getItem('bib_sort_dir') || 'asc',
   missingFilter: localStorage.getItem('bib_missing_filter') || 'none',
   viewMode: localStorage.getItem('bib_view_mode') || 'list',
+  checkMode: localStorage.getItem('bib_check_mode') === '1',
   items: [],
   loans: [],
   scannerRunning: false,
@@ -254,6 +255,7 @@ document.addEventListener('keydown', function(e){
 });
 
 window.addEventListener('popstate', function(){
+  clearTimeout(checkModeTimer);
   if (!session) return;
   if (state.lookup){
     setLookup(null);
@@ -752,6 +754,7 @@ function goToCollectionHome(){
 }
 
 async function setTab(tab){
+  clearTimeout(checkModeTimer);
   await stopScanner();
   state.tab = tab;
   state.scannedBarcode = null;
@@ -892,6 +895,9 @@ function renderScan(main){
       <button class="${state.addTarget==='wishlist'?'active':''}" onclick="setAddTarget('wishlist')">Na listę życzeń</button>
     </div>
     ${hwScanInputHtml('hw-scan-add')}
+    <button class="btn ${state.checkMode ? '' : 'secondary'}" style="margin-top:10px;display:flex;align-items:center;justify-content:center;gap:8px;" onclick="toggleCheckMode()" title="Po zeskanowaniu istniejącej pozycji karta pokazuje się na 3 sekundy, po czym appka sama wraca do skanowania">
+      ${state.checkMode ? '✓ Sprawdź: WŁĄCZONE' : 'Sprawdź: wyłączone'}
+    </button>
     ${desktop ? '' : `
     <div class="card" style="text-align:center;display:flex;flex-direction:column;justify-content:center;align-items:center;min-height:40vh;">
       <div class="scan-hint" style="margin-bottom:20px;">Albo dotknij, żeby uruchomić kamerę</div>
@@ -918,6 +924,18 @@ function setAddTarget(v){
 function toggleBatchScanMode(on){
   state.batchScanMode = on;
   localStorage.setItem('bib_batch_scan', on ? '1' : '0');
+}
+
+// "Sprawdź": po zeskanowaniu pozycji, która już jest w kolekcji, karta pokazuje się
+// przez 3s i appka sama wraca do skanowania — do szybkiego sprawdzania wielu kodów pod rząd
+// bez ręcznego wracania po każdym. checkModeTimer trzyma jeden wspólny timer, więc kolejny
+// skan w trakcie odliczania po prostu je resetuje zamiast się nakładać.
+let checkModeTimer = null;
+function toggleCheckMode(){
+  state.checkMode = !state.checkMode;
+  localStorage.setItem('bib_check_mode', state.checkMode ? '1' : '0');
+  if (!state.checkMode) clearTimeout(checkModeTimer);
+  renderTab();
 }
 
 function toggleLoanBatchScanMode(on){
@@ -1053,6 +1071,13 @@ async function onBarcode(code){
     // Nie przełączamy state.tab na 'list' — user przyszedł tu ze skanowania, więc jeden Backspace
     // z karty pozycji ma wracać dokładnie tam (a nie na losowy, nieaktualny filtr Kolekcji).
     openItem(existing.id);
+    if (state.checkMode){
+      clearTimeout(checkModeTimer);
+      const targetId = existing.id;
+      checkModeTimer = setTimeout(() => {
+        if (state.checkMode && state.openItemId === targetId) setTab('scan');
+      }, 3000);
+    }
     return;
   }
   lookupLog = [];
