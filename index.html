@@ -2888,7 +2888,7 @@ function renderLoans(main){
         Filtr: ${state.loanQuickFilter==='out'?'Wypożyczone innym':state.loanQuickFilter==='in'?'Pożyczone od kogoś':'Przeterminowane'} ✕
       </div>
     ` : ''}
-    <button class="btn small secondary" style="margin-bottom:12px;" onclick="toggleLoanHistory()">${state.showLoanHistory ? 'Ukryj historię' : 'Pokaż historię zwróconych'}</button>
+    <button class="btn small ${state.showLoanHistory ? '' : 'secondary'}" style="margin-bottom:12px;" onclick="toggleLoanHistory()">${state.showLoanHistory ? '✓ Historia zwróconych (kliknij, żeby ukryć)' : 'Pokaż historię zwróconych'}</button>
   `;
 
   if (state.showLoanHistory){
