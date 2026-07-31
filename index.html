@@ -241,6 +241,7 @@ let state = {
   viewMode: localStorage.getItem('bib_view_mode') || 'list',
   checkMode: localStorage.getItem('bib_check_mode') === '1',
   scanActionMode: localStorage.getItem('bib_scan_action_mode') || null,
+  scanReturnFeedback: false,
   items: [],
   loans: [],
   scannerRunning: false,
@@ -851,6 +852,7 @@ function goToCollectionHome(){
 async function setTab(tab){
   clearTimeout(checkModeTimer);
   clearTimeout(scanFeedbackTimer);
+  state.scanReturnFeedback = false;
   await stopScanner();
   state.tab = tab;
   state.scannedBarcode = null;
@@ -1030,22 +1032,10 @@ function toggleBatchScanMode(on){
 // skan w trakcie odliczania po prostu je resetuje zamiast się nakładać.
 let checkModeTimer = null;
 
-// Krótki komunikat na miejscu ekranu skanowania (np. "pozycja jest dostępna, nie była
-// wypożyczona" po zeskanowaniu w trybie Zwrot) zamiast otwierania pełnej karty pozycji —
-// znika sam po 3s i appka wraca do gotowości do skanowania.
+// Timer dla scanReturnFeedback (patrz renderLendBox/onBarcode): po zeskanowaniu w trybie
+// Zwrot pozycji, która nie była wypożyczona, karta zostaje na ekranie 3s z komunikatem
+// zamiast przycisków "Pożycz komuś", po czym appka sama wraca do skanowania.
 let scanFeedbackTimer = null;
-function showScanFeedback(title, message){
-  clearTimeout(scanFeedbackTimer);
-  const main = document.getElementById('main');
-  main.innerHTML = `
-    <div class="card" style="text-align:center;padding:36px 20px;">
-      <div class="badge ok" style="font-size:14px;padding:8px 16px;margin-bottom:16px;">Dostępne</div>
-      <div style="font-size:17px;font-weight:600;margin-bottom:6px;">${escapeHtml(title)}</div>
-      <div class="meta">${escapeHtml(message)}</div>
-    </div>
-  `;
-  scanFeedbackTimer = setTimeout(() => setTab('scan'), 3000);
-}
 
 function toggleCheckMode(){
   state.checkMode = !state.checkMode;
@@ -1222,7 +1212,14 @@ async function onBarcode(code){
       if (activeLoan){
         await returnLoan(activeLoan.id, existing.id); // pokazuje kartę pozycji z już zatwierdzonym zwrotem
       } else {
-        showScanFeedback(existing.title, 'Ta pozycja jest dostępna — nie była wypożyczona.');
+        // openItemId musi być ustawiony PRZED flagą/openItem(), bo openItem() zeruje
+        // scanReturnFeedback, gdy trafia na inną pozycję niż aktualnie "otwarta" (ten sam
+        // mechanizm, który wcześniej kasował lendMode przy skanowaniu "Wypożycz").
+        state.openItemId = existing.id;
+        state.scanReturnFeedback = true;
+        openItem(existing.id);
+        clearTimeout(scanFeedbackTimer);
+        scanFeedbackTimer = setTimeout(() => setTab('scan'), 3000);
       }
     }
     return;
@@ -2609,7 +2606,7 @@ async function bulkSetWatched(watched){
 function openItem(id){
   const item = state.items.find(i=>i.id===id);
   if (!item) return;
-  if (state.openItemId !== id) state.lendMode = null;
+  if (state.openItemId !== id){ state.lendMode = null; state.scanReturnFeedback = false; }
   state.openItemId = id;
   window.history.pushState({ item: id }, '');
   const loan = activeLoanFor(id);
@@ -2758,6 +2755,14 @@ function renderLendBox(item){
       <input type="date" id="due-date-input" value="${toLocalDateInput(new Date(Date.now() + OVERDUE_DAYS*86400000))}">
       <button class="btn" onclick="lendItem('${item.id}','${mode}')">${isIn ? 'Zapisz' : 'Pożycz'}</button>
       <button class="btn secondary" style="margin-top:8px;" onclick="cancelLendMode('${item.id}')">Anuluj</button>
+    `;
+  }
+  if (state.scanReturnFeedback){
+    return `
+      <div class="card" style="text-align:center;padding:22px 16px;background:rgba(61,220,132,.08);border-color:var(--ok);">
+        <div class="badge ok" style="font-size:14px;padding:8px 16px;margin-bottom:12px;">Dostępne</div>
+        <div style="font-weight:600;">Ta pozycja nie była wypożyczona.</div>
+      </div>
     `;
   }
   return `
