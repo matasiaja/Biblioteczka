@@ -242,6 +242,17 @@ document.addEventListener('keydown', function(e){
   window.history.back();
 });
 
+// Spacja poza polem tekstowym skacze prosto do pola skanowania — niezależnie od tego jak
+// głęboko w nawigacji (karta pozycji, formularz nowej pozycji...) user się aktualnie znajduje.
+document.addEventListener('keydown', function(e){
+  if (e.key !== ' ') return;
+  const tag = document.activeElement ? document.activeElement.tagName.toLowerCase() : '';
+  const editable = document.activeElement && document.activeElement.isContentEditable;
+  if (tag === 'input' || tag === 'textarea' || tag === 'select' || editable) return;
+  e.preventDefault();
+  setTab('scan');
+});
+
 window.addEventListener('popstate', function(){
   if (!session) return;
   if (state.lookup){
