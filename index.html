@@ -2704,7 +2704,7 @@ function renderSearch(main){
   ) : []);
   main.innerHTML = `
     <div style="position:relative;margin-bottom:14px;">
-      <input id="search-q" value="${escapeHtml(state.searchQuery||'')}" placeholder="Szukaj: tytuł, autor, wydawnictwo, kod…" oninput="onSearchInput()" onkeydown="if(event.key===' '){event.preventDefault();clearSearchQuery();}" style="margin-bottom:0;${state.searchQuery ? 'padding-right:44px;' : ''}">
+      <input id="search-q" value="${escapeHtml(state.searchQuery||'')}" placeholder="Szukaj: tytuł, autor, wydawnictwo, kod…" oninput="onSearchInput()" style="margin-bottom:0;${state.searchQuery ? 'padding-right:44px;' : ''}">
       ${state.searchQuery ? `<button type="button" onclick="clearSearchQuery()" aria-label="Wyczyść pole" title="Wyczyść i przygotuj do kolejnego skanu" style="position:absolute;right:6px;top:50%;transform:translateY(-50%);width:32px;height:32px;border:none;background:var(--surface);color:var(--text-dim);border-radius:8px;font-size:16px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;">✕</button>` : ''}
     </div>
     ${q ? sortSelect() : ''}
