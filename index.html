@@ -232,6 +232,107 @@ const CREATOR_LABELS = { book: 'Autor', movie: 'Reżyser', music: 'Artysta' };
 const YEAR_LABELS = { book: 'Rok wydania', movie: 'Rok premiery', music: 'Rok wydania' };
 const CONSUMED_LABELS = { book: 'Przeczytane', movie: 'Obejrzane', music: 'Odsłuchane' };
 const TO_CONSUME_LABELS = { book: 'Do przeczytania', movie: 'Do obejrzenia', music: 'Do odsłuchania' };
+
+// ---------------- I18N ----------------
+// Tłumaczenia głównego interfejsu (nawigacja, przyciski, etykiety, nagłówki tabel).
+// Rzadsze/techniczne komunikaty (toasty, błędy zewnętrznych API, ekran Ustawień/Statystyk)
+// zostają na razie po polsku — patrz TYPE_LABELS/CREATOR_LABELS/itd. niżej, których
+// zawartość applyLocaleLabels() nadpisuje w miejscu przy zmianie języka.
+const I18N = {
+  pl: {
+    nav_scan: 'Dodaj', nav_list: 'Kolekcja', nav_loans: 'Wypożyczenia', nav_settings: 'Ustawienia',
+    to_collection: 'Do kolekcji', to_wishlist: 'Na listę życzeń',
+    check_mode: 'Sprawdź', lend_mode: 'Wypożycz', return_mode: 'Zwrot',
+    scan_btn: 'SKANUJ', manual_code: 'Wpisz kod ręcznie', add_no_code: 'Dodaj bez kodu',
+    continuous_scan: 'Tryb ciągłego skanowania — po zapisaniu od razu skanuj kolejną pozycję',
+    search: 'Szukaj', collection: 'Kolekcja', wishlist: 'Lista życzeń', queue: 'Kolejka',
+    all: 'Wszystko', add_item: '+ Dodaj pozycję', select: 'Zaznacz', done: 'Gotowe',
+    manual_order: 'Kolejność ręczna',
+    col_title_author: 'Tytuł / Autor', col_type: 'Rodzaj', col_format: 'Format', col_year: 'Rok', col_status: 'Status',
+    available: 'Dostępne',
+    back: 'Wstecz', back_to_list: 'Wróć do listy', edit: 'Edytuj', delete_item: 'Usuń z kolekcji',
+    author: 'Autor', publisher: 'Wydawca', year_of_release: 'Rok wydania', barcode_label: 'Kod kreskowy', index_label: 'Numer indeksu',
+    lend_to_someone: 'Pożycz komuś', register_borrowed: 'Zarejestruj jako pożyczone od kogoś',
+    who_lending: 'Komu pożyczasz?', who_borrowed_from: 'Od kogo pożyczyłeś?',
+    borrow_date: 'Data pożyczenia', due_date: 'Termin zwrotu', save: 'Zapisz', lend_btn: 'Pożycz', cancel: 'Anuluj',
+    email: 'E-mail', password: 'Hasło', login_btn: 'Zaloguj się',
+    book: 'Książka', movie: 'Film', music: 'Muzyka',
+    author_book: 'Autor', author_movie: 'Reżyser', author_music: 'Artysta',
+    year_book: 'Rok wydania', year_movie: 'Rok premiery', year_music: 'Rok wydania',
+    consumed_book: 'Przeczytane', consumed_movie: 'Obejrzane', consumed_music: 'Odsłuchane',
+    to_consume_book: 'Do przeczytania', to_consume_movie: 'Do obejrzenia', to_consume_music: 'Do odsłuchania'
+  },
+  en: {
+    nav_scan: 'Add', nav_list: 'Collection', nav_loans: 'Loans', nav_settings: 'Settings',
+    to_collection: 'To collection', to_wishlist: 'To wishlist',
+    check_mode: 'Check', lend_mode: 'Lend', return_mode: 'Return',
+    scan_btn: 'SCAN', manual_code: 'Enter code manually', add_no_code: 'Add without code',
+    continuous_scan: 'Continuous scan mode — scan the next item right after saving',
+    search: 'Search', collection: 'Collection', wishlist: 'Wishlist', queue: 'Queue',
+    all: 'All', add_item: '+ Add item', select: 'Select', done: 'Done',
+    manual_order: 'Manual order',
+    col_title_author: 'Title / Author', col_type: 'Type', col_format: 'Format', col_year: 'Year', col_status: 'Status',
+    available: 'Available',
+    back: 'Back', back_to_list: 'Back to list', edit: 'Edit', delete_item: 'Remove from collection',
+    author: 'Author', publisher: 'Publisher', year_of_release: 'Year of release', barcode_label: 'Barcode', index_label: 'Index number',
+    lend_to_someone: 'Lend to someone', register_borrowed: 'Register as borrowed from someone',
+    who_lending: 'Who are you lending to?', who_borrowed_from: 'Who did you borrow it from?',
+    borrow_date: 'Borrow date', due_date: 'Due date', save: 'Save', lend_btn: 'Lend', cancel: 'Cancel',
+    email: 'Email', password: 'Password', login_btn: 'Log in',
+    book: 'Book', movie: 'Movie', music: 'Music',
+    author_book: 'Author', author_movie: 'Director', author_music: 'Artist',
+    year_book: 'Year of publication', year_movie: 'Release year', year_music: 'Year of release',
+    consumed_book: 'Read', consumed_movie: 'Watched', consumed_music: 'Listened',
+    to_consume_book: 'To read', to_consume_movie: 'To watch', to_consume_music: 'To listen'
+  },
+  zh: {
+    nav_scan: '添加', nav_list: '收藏', nav_loans: '借阅', nav_settings: '设置',
+    to_collection: '加入收藏', to_wishlist: '加入心愿单',
+    check_mode: '检查', lend_mode: '借出', return_mode: '归还',
+    scan_btn: '扫描', manual_code: '手动输入代码', add_no_code: '无代码添加',
+    continuous_scan: '连续扫描模式 — 保存后立即扫描下一项',
+    search: '搜索', collection: '收藏', wishlist: '心愿单', queue: '队列',
+    all: '全部', add_item: '+ 添加项目', select: '选择', done: '完成',
+    manual_order: '手动排序',
+    col_title_author: '标题 / 作者', col_type: '类型', col_format: '格式', col_year: '年份', col_status: '状态',
+    available: '可用',
+    back: '返回', back_to_list: '返回列表', edit: '编辑', delete_item: '从收藏中删除',
+    author: '作者', publisher: '出版社', year_of_release: '出版年份', barcode_label: '条形码', index_label: '编号',
+    lend_to_someone: '借给某人', register_borrowed: '登记为从某人借来的',
+    who_lending: '借给谁？', who_borrowed_from: '从谁那里借的？',
+    borrow_date: '借出日期', due_date: '归还期限', save: '保存', lend_btn: '借出', cancel: '取消',
+    email: '电子邮件', password: '密码', login_btn: '登录',
+    book: '书籍', movie: '电影', music: '音乐',
+    author_book: '作者', author_movie: '导演', author_music: '艺术家',
+    year_book: '出版年份', year_movie: '上映年份', year_music: '发行年份',
+    consumed_book: '已读', consumed_movie: '已看', consumed_music: '已听',
+    to_consume_book: '待读', to_consume_movie: '待看', to_consume_music: '待听'
+  }
+};
+
+function t(key){
+  const dict = I18N[state.locale] || I18N.pl;
+  return dict[key] || I18N.pl[key] || key;
+}
+
+// TYPE_LABELS/CREATOR_LABELS/itd. są używane w dziesiątkach miejsc jako zwykłe obiekty
+// (np. TYPE_LABELS[item.type]) — zamiast przerabiać każde wywołanie na funkcję, po prostu
+// nadpisujemy zawartość tych stałych obiektów przy starcie i przy każdej zmianie języka.
+function applyLocaleLabels(){
+  TYPE_LABELS.book = t('book'); TYPE_LABELS.movie = t('movie'); TYPE_LABELS.music = t('music');
+  CREATOR_LABELS.book = t('author_book'); CREATOR_LABELS.movie = t('author_movie'); CREATOR_LABELS.music = t('author_music');
+  YEAR_LABELS.book = t('year_book'); YEAR_LABELS.movie = t('year_movie'); YEAR_LABELS.music = t('year_music');
+  CONSUMED_LABELS.book = t('consumed_book'); CONSUMED_LABELS.movie = t('consumed_movie'); CONSUMED_LABELS.music = t('consumed_music');
+  TO_CONSUME_LABELS.book = t('to_consume_book'); TO_CONSUME_LABELS.movie = t('to_consume_movie'); TO_CONSUME_LABELS.music = t('to_consume_music');
+}
+
+function setLocale(loc){
+  state.locale = loc;
+  localStorage.setItem('bib_locale', loc);
+  applyLocaleLabels();
+  render();
+}
+
 let state = {
   attrFilter: null,
   tab: localStorage.getItem('bib_tab') || 'scan',
@@ -244,6 +345,7 @@ let state = {
   scanActionMode: localStorage.getItem('bib_scan_action_mode') || null,
   scanReturnFeedback: false,
   toConsumeManualSort: localStorage.getItem('bib_to_consume_manual_sort') === '1',
+  locale: localStorage.getItem('bib_locale') || 'pl',
   items: [],
   loans: [],
   scannerRunning: false,
@@ -279,6 +381,7 @@ let state = {
   loanQuickFilter: 'all',
   cameFromStats: false
 };
+applyLocaleLabels();
 
 const app = document.getElementById('app');
 
@@ -798,6 +901,11 @@ function render(){
           <div><h1>Biblioteczka</h1><div class="sub">${escapeHtml(session.user.email)}</div></div>
         </div>
         <div style="display:flex;align-items:center;gap:8px;">
+          <div style="display:flex;gap:3px;">
+            <button class="icon-btn ${state.locale==='pl'?'active':''}" onclick="setLocale('pl')" title="Polski" style="font-size:16px;">🇵🇱</button>
+            <button class="icon-btn ${state.locale==='en'?'active':''}" onclick="setLocale('en')" title="English" style="font-size:16px;">🇬🇧</button>
+            <button class="icon-btn ${state.locale==='zh'?'active':''}" onclick="setLocale('zh')" title="中文" style="font-size:16px;">🇨🇳</button>
+          </div>
           <button class="icon-btn ${state.searchMode ? 'active' : ''}" onclick="toggleSearch()" title="Szukaj w kolekcji">${icon(state.searchMode ? 'x' : 'search')}</button>
           <button class="link" onclick="logout()">Wyloguj</button>
         </div>
@@ -823,7 +931,7 @@ function render(){
 // Panel boczny (desktop) i dolny pasek (telefon) pokazują ten sam zestaw przycisków —
 // który z nich jest widoczny decyduje wyłącznie CSS (@media pointer:fine).
 function navButtonsHtml(){
-  return navBtn('scan','Dodaj') + navBtn('list','Kolekcja') + navBtn('loans','Wypożyczenia') + navBtn('settings','Ustawienia');
+  return navBtn('scan',t('nav_scan')) + navBtn('list',t('nav_list')) + navBtn('loans',t('nav_loans')) + navBtn('settings',t('nav_settings'));
 }
 
 function navBtn(tab,label){
@@ -944,13 +1052,18 @@ function renderLogin(){
     <div style="max-width:340px;margin:80px auto;padding:0 20px;">
       <img src="logo.svg" alt="Biblioteczka" style="width:88px;height:88px;display:block;margin:0 auto 14px;">
       <h1 style="text-align:center;margin-bottom:4px;">Biblioteczka</h1>
-      <div style="text-align:center;color:var(--text-dim);font-size:12px;font-family:'IBM Plex Mono',monospace;margin-bottom:24px;">katalog książek, filmów i muzyki</div>
+      <div style="text-align:center;color:var(--text-dim);font-size:12px;font-family:'IBM Plex Mono',monospace;margin-bottom:16px;">katalog książek, filmów i muzyki</div>
+      <div style="display:flex;justify-content:center;gap:4px;margin-bottom:24px;">
+        <button class="icon-btn ${state.locale==='pl'?'active':''}" onclick="setLocale('pl')" title="Polski" style="font-size:16px;">🇵🇱</button>
+        <button class="icon-btn ${state.locale==='en'?'active':''}" onclick="setLocale('en')" title="English" style="font-size:16px;">🇬🇧</button>
+        <button class="icon-btn ${state.locale==='zh'?'active':''}" onclick="setLocale('zh')" title="中文" style="font-size:16px;">🇨🇳</button>
+      </div>
       <div class="card">
-        <label>E-mail</label>
+        <label>${t('email')}</label>
         <input id="login-email" type="email" placeholder="ty@przyklad.pl" onkeydown="if(event.key==='Enter'){event.preventDefault();login();}">
-        <label>Hasło</label>
+        <label>${t('password')}</label>
         <input id="login-pass" type="password" placeholder="••••••••" onkeydown="if(event.key==='Enter'){event.preventDefault();login();}">
-        <button class="btn" onclick="login()">Zaloguj się</button>
+        <button class="btn" onclick="login()">${t('login_btn')}</button>
         <div id="login-err" style="color:var(--danger);font-size:12px;margin-top:10px;"></div>
       </div>
     </div>`;
@@ -991,28 +1104,28 @@ function renderScan(main){
   // reakcją na dotknięcie ekranu — nie da się jej auto-odpalić zaraz po wejściu na zakładkę.
   main.innerHTML = `
     <div class="tabs" style="margin-bottom:14px;">
-      <button class="${state.addTarget==='owned'?'active':''}" onclick="setAddTarget('owned')">Do kolekcji</button>
-      <button class="${state.addTarget==='wishlist'?'active':''}" onclick="setAddTarget('wishlist')">Na listę życzeń</button>
+      <button class="${state.addTarget==='owned'?'active':''}" onclick="setAddTarget('owned')">${t('to_collection')}</button>
+      <button class="${state.addTarget==='wishlist'?'active':''}" onclick="setAddTarget('wishlist')">${t('to_wishlist')}</button>
     </div>
     ${hwScanInputHtml('hw-scan-add')}
     <div class="scan-modes">
-      <button class="btn tile-sprawdz ${state.checkMode ? '' : 'secondary'}" onclick="toggleCheckMode()" title="Po zeskanowaniu istniejącej pozycji karta pokazuje się na 1,5 sekundy, po czym appka sama wraca do skanowania">${icon('check')}<span>Sprawdź</span></button>
-      <button class="btn tile-wypozycz ${state.scanActionMode==='lend' ? '' : 'secondary'}" onclick="toggleScanActionMode('lend')" title="Zeskanowanie pozycji od razu otwiera formularz wypożyczenia">${icon('loans')}<span>Wypożycz</span></button>
-      <button class="btn tile-zwrot ${state.scanActionMode==='return' ? '' : 'secondary'}" onclick="toggleScanActionMode('return')" title="Zeskanowanie wypożyczonej pozycji od razu oznacza zwrot">${icon('undo')}<span>Zwrot</span></button>
+      <button class="btn tile-sprawdz ${state.checkMode ? '' : 'secondary'}" onclick="toggleCheckMode()" title="Po zeskanowaniu istniejącej pozycji karta pokazuje się na 1,5 sekundy, po czym appka sama wraca do skanowania">${icon('check')}<span>${t('check_mode')}</span></button>
+      <button class="btn tile-wypozycz ${state.scanActionMode==='lend' ? '' : 'secondary'}" onclick="toggleScanActionMode('lend')" title="Zeskanowanie pozycji od razu otwiera formularz wypożyczenia">${icon('loans')}<span>${t('lend_mode')}</span></button>
+      <button class="btn tile-zwrot ${state.scanActionMode==='return' ? '' : 'secondary'}" onclick="toggleScanActionMode('return')" title="Zeskanowanie wypożyczonej pozycji od razu oznacza zwrot">${icon('undo')}<span>${t('return_mode')}</span></button>
     </div>
     ${desktop ? '' : `
     <div class="card" style="text-align:center;display:flex;flex-direction:column;justify-content:center;align-items:center;min-height:40vh;">
       <div class="scan-hint" style="margin-bottom:20px;">Albo dotknij, żeby uruchomić kamerę</div>
-      <button class="btn" style="max-width:280px;padding:32px;font-size:24px;letter-spacing:1px;" onclick="beginScan()">SKANUJ</button>
+      <button class="btn" style="max-width:280px;padding:32px;font-size:24px;letter-spacing:1px;" onclick="beginScan()">${t('scan_btn')}</button>
     </div>
     `}
     <div style="margin-top:14px;">
-      <button class="btn secondary" onclick="manualBarcode()">Wpisz kod ręcznie</button>
-      <button class="btn secondary" style="margin-top:8px;" onclick="skipBarcode()">Dodaj bez kodu</button>
+      <button class="btn secondary" onclick="manualBarcode()">${t('manual_code')}</button>
+      <button class="btn secondary" style="margin-top:8px;" onclick="skipBarcode()">${t('add_no_code')}</button>
     </div>
     <label style="display:flex;align-items:center;gap:8px;margin-top:16px;cursor:pointer;">
       <input type="checkbox" style="width:18px;height:18px;margin:0;" ${state.batchScanMode?'checked':''} onchange="toggleBatchScanMode(this.checked)">
-      <span class="meta">Tryb ciągłego skanowania — po zapisaniu od razu skanuj kolejną pozycję</span>
+      <span class="meta">${t('continuous_scan')}</span>
     </label>
   `;
   bindHwScanInput('hw-scan-add', onBarcode);
@@ -2220,15 +2333,15 @@ function renderList(main){
     <div class="list-layout">
       <div class="list-filters">
         <div class="row list-toolbar" style="margin-bottom:12px;">
-          <button class="btn secondary" onclick="goAddNew('${state.listView}')">+ Dodaj pozycję</button>
+          <button class="btn secondary" onclick="goAddNew('${state.listView}')">${t('add_item')}</button>
           <button class="btn small secondary" style="flex:0 0 auto;" onclick="toggleViewMode()" title="${state.viewMode==='grid' ? 'Widok listy' : 'Widok siatki okładek'}">${state.viewMode==='grid' ? icon('list') : icon('grid')}</button>
-          <button class="btn small secondary" style="flex:0 0 auto;" onclick="toggleSelectMode()">${state.selectMode ? 'Gotowe' : 'Zaznacz'}</button>
+          <button class="btn small secondary" style="flex:0 0 auto;" onclick="toggleSelectMode()">${state.selectMode ? t('done') : t('select')}</button>
         </div>
         <div class="filter-tiles">
-          <button class="btn secondary filter-tile" onclick="toggleSearch()" title="Szukaj w kolekcji">${icon('search')}<span>Szukaj</span></button>
-          <button class="btn filter-tile ${state.listView==='owned'?'':'secondary'}" onclick="setListView('owned')">${icon('book')}<span>Kolekcja</span></button>
-          <button class="btn filter-tile ${state.listView==='wishlist'?'':'secondary'}" onclick="setListView('wishlist')">${icon('list')}<span>Lista życzeń${wishlistCount?` (${wishlistCount})`:''}</span></button>
-          <button class="btn filter-tile ${state.listView==='queue'?'':'secondary'}" onclick="setListView('queue')">${icon('grid')}<span>Kolejka${queueCount?` (${queueCount})`:''}</span></button>
+          <button class="btn secondary filter-tile" onclick="toggleSearch()" title="Szukaj w kolekcji">${icon('search')}<span>${t('search')}</span></button>
+          <button class="btn filter-tile ${state.listView==='owned'?'':'secondary'}" onclick="setListView('owned')">${icon('book')}<span>${t('collection')}</span></button>
+          <button class="btn filter-tile ${state.listView==='wishlist'?'':'secondary'}" onclick="setListView('wishlist')">${icon('list')}<span>${t('wishlist')}${wishlistCount?` (${wishlistCount})`:''}</span></button>
+          <button class="btn filter-tile ${state.listView==='queue'?'':'secondary'}" onclick="setListView('queue')">${icon('grid')}<span>${t('queue')}${queueCount?` (${queueCount})`:''}</span></button>
         </div>
         ${state.selectMode ? `
           <div class="card" style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px;padding:12px;flex-wrap:wrap;">
@@ -2244,12 +2357,12 @@ function renderList(main){
           </div>
         ` : ''}
         <div class="filter-tiles">
-          ${['all','book','movie','music'].map(t=>`<button class="btn filter-tile ${state.typeFilter===t?'':'secondary'}" onclick="setTypeFilter('${t}')">${icon(t==='all'?'grid':t)}<span>${t==='all'?'Wszystko':TYPE_LABELS[t]} (${counts[t]})</span></button>`).join('')}
+          ${['all','book','movie','music'].map(tf=>`<button class="btn filter-tile ${state.typeFilter===tf?'':'secondary'}" onclick="setTypeFilter('${tf}')">${icon(tf==='all'?'grid':tf)}<span>${tf==='all'?t('all'):TYPE_LABELS[tf]} (${counts[tf]})</span></button>`).join('')}
         </div>
         ${(state.missingFilter==='to_consume' && state.toConsumeManualSort) ? '' : sortSelect()}
         ${missingSelect()}
         ${state.missingFilter==='to_consume' ? `
-          <button class="btn ${state.toConsumeManualSort ? '' : 'secondary'}" style="margin-bottom:10px;" onclick="toggleToConsumeManualSort()" title="Ustaw własną kolejność strzałkami góra/dół na liście">${state.toConsumeManualSort ? '✓ Kolejność ręczna' : 'Kolejność ręczna'}</button>
+          <button class="btn ${state.toConsumeManualSort ? '' : 'secondary'}" style="margin-bottom:10px;" onclick="toggleToConsumeManualSort()" title="Ustaw własną kolejność strzałkami góra/dół na liście">${state.toConsumeManualSort ? '✓ ' : ''}${t('manual_order')}</button>
         ` : ''}
       </div>
       <div class="list-results">
@@ -2272,11 +2385,11 @@ function renderList(main){
               <div class="item-row item-row-header catalog-row" ${manualReorder ? 'style="grid-template-columns:56px 56px 1fr 100px 120px 64px 150px;"' : ''}>
                 <div class="row-col-check"></div>
                 <div></div>
-                <div class="row-title">Tytuł / Autor</div>
-                <div class="row-col row-col-type">Rodzaj</div>
-                <div class="row-col row-col-format">Format</div>
-                <div class="row-col row-col-year">Rok</div>
-                <div class="row-col row-col-status">Status</div>
+                <div class="row-title">${t('col_title_author')}</div>
+                <div class="row-col row-col-type">${t('col_type')}</div>
+                <div class="row-col row-col-format">${t('col_format')}</div>
+                <div class="row-col row-col-year">${t('col_year')}</div>
+                <div class="row-col row-col-status">${t('col_status')}</div>
               </div>
               ${filtered.map((i,idx)=>{
                 const loan = activeLoanFor(i.id);
@@ -2284,7 +2397,7 @@ function renderList(main){
                 const statusCell = loan
                   ? `<span class="badge ${isOverdue(loan)?'danger':'warn'}">${loan.direction==='in'?'Pożyczone od':'Wypożyczone'}: ${escapeHtml(loan.borrower_name)}</span>`
                   : i.watched ? `<span class="badge ok">${CONSUMED_LABELS[i.type]}</span>`
-                  : `<span class="badge ok">Dostępne</span>`;
+                  : `<span class="badge ok">${t('available')}</span>`;
                 const checkCell = manualReorder
                   ? `<div style="display:flex;flex-direction:column;gap:2px;" onclick="event.stopPropagation();">
                       <button class="btn small secondary" style="padding:2px 8px;" onclick="moveToConsumeItem('${i.id}',-1)" ${idx===0?'disabled':''}>↑</button>
@@ -2681,7 +2794,7 @@ function openItem(id){
   // (@media pointer:fine), markup jest ten sam dla telefonu i komputera.
   const coverSize = isDesktopDevice() ? 260 : 100;
   main.innerHTML = `
-    <button class="link" onclick="state.openItemId=null;renderTab()">&larr; ${state.tab==='list' ? 'Wróć do listy' : 'Wstecz'}</button>
+    <button class="link" onclick="state.openItemId=null;renderTab()">&larr; ${state.tab==='list' ? t('back_to_list') : t('back')}</button>
     <div class="card item-detail-card" style="margin-top:12px;">
       ${item.cover_url ? `
         <div class="item-detail-cover">
@@ -2696,12 +2809,12 @@ function openItem(id){
       <h2 style="margin:0 0 4px;">${escapeHtml(item.title)}</h2>
       <div class="meta mono item-detail-meta-compact" style="color:var(--text-dim);margin-bottom:14px;">${item.creator ? `<span class="attr-link" data-field="creator" data-value="${escapeHtml(item.creator)}" onclick="filterByAttrEl(this)">${escapeHtml(item.creator)}</span>` : '—'}${item.format?` · <span class="attr-link" data-field="format" data-value="${escapeHtml(item.format)}" onclick="filterByAttrEl(this)">${escapeHtml(item.format)}</span>`:''}${item.year?` · <span class="attr-link" data-field="year" data-value="${item.year}" onclick="filterByAttrEl(this)">${item.year}</span>`:''}${item.publisher?' · '+escapeHtml(item.publisher):''}${item.barcode?' · '+escapeHtml(item.barcode):''}${item.index_number?' · Indeks: '+escapeHtml(item.index_number):''}</div>
       <dl class="record-fields">
-        ${item.creator ? `<div class="record-row"><dt>Autor</dt><dd><span class="attr-link" data-field="creator" data-value="${escapeHtml(item.creator)}" onclick="filterByAttrEl(this)">${escapeHtml(item.creator)}</span></dd></div>` : ''}
-        ${item.publisher ? `<div class="record-row"><dt>Wydawca</dt><dd>${escapeHtml(item.publisher)}</dd></div>` : ''}
-        ${item.year ? `<div class="record-row"><dt>Rok wydania</dt><dd><span class="attr-link" data-field="year" data-value="${item.year}" onclick="filterByAttrEl(this)">${item.year}</span></dd></div>` : ''}
-        ${item.format ? `<div class="record-row"><dt>Format</dt><dd><span class="attr-link" data-field="format" data-value="${escapeHtml(item.format)}" onclick="filterByAttrEl(this)">${escapeHtml(item.format)}</span></dd></div>` : ''}
-        ${item.barcode ? `<div class="record-row"><dt>Kod kreskowy</dt><dd class="mono">${escapeHtml(item.barcode)}</dd></div>` : ''}
-        ${item.index_number ? `<div class="record-row"><dt>Numer indeksu</dt><dd class="mono">${escapeHtml(item.index_number)}</dd></div>` : ''}
+        ${item.creator ? `<div class="record-row"><dt>${t('author')}</dt><dd><span class="attr-link" data-field="creator" data-value="${escapeHtml(item.creator)}" onclick="filterByAttrEl(this)">${escapeHtml(item.creator)}</span></dd></div>` : ''}
+        ${item.publisher ? `<div class="record-row"><dt>${t('publisher')}</dt><dd>${escapeHtml(item.publisher)}</dd></div>` : ''}
+        ${item.year ? `<div class="record-row"><dt>${t('year_of_release')}</dt><dd><span class="attr-link" data-field="year" data-value="${item.year}" onclick="filterByAttrEl(this)">${item.year}</span></dd></div>` : ''}
+        ${item.format ? `<div class="record-row"><dt>${t('col_format')}</dt><dd><span class="attr-link" data-field="format" data-value="${escapeHtml(item.format)}" onclick="filterByAttrEl(this)">${escapeHtml(item.format)}</span></dd></div>` : ''}
+        ${item.barcode ? `<div class="record-row"><dt>${t('barcode_label')}</dt><dd class="mono">${escapeHtml(item.barcode)}</dd></div>` : ''}
+        ${item.index_number ? `<div class="record-row"><dt>${t('index_label')}</dt><dd class="mono">${escapeHtml(item.index_number)}</dd></div>` : ''}
       </dl>
       ${item.rating ? `<div style="color:var(--warn);font-size:18px;margin-bottom:10px;">${starsHtml(item.rating)}</div>` : ''}
       ${item.notes ? clampedTextHtml(item.notes, 'margin-bottom:14px;') : ''}
@@ -2722,14 +2835,14 @@ function openItem(id){
           <span class="badge ${isOverdue(loan)?'danger':'warn'}">${loan.direction==='in' ? 'Pożyczone od: '+escapeHtml(loan.borrower_name) : 'Wypożyczone: '+escapeHtml(loan.borrower_name)}</span>
           <span class="badge accent">${isOverdue(loan)?loanDaysOverdue(loan)+'d po terminie':loanDaysLeft(loan)+'d do zwrotu'}</span>
         </div>
-        <label>Data pożyczenia</label>
+        <label>${t('borrow_date')}</label>
         <input type="date" id="loan-date-input" value="${toLocalDateInput(loan.borrowed_at)}" onchange="updateLoanDate('${loan.id}','${item.id}')" style="margin-bottom:12px;">
-        <label>Termin zwrotu</label>
+        <label>${t('due_date')}</label>
         <input type="date" id="due-date-edit-input" value="${loan.due_date || ''}" onchange="updateDueDate('${loan.id}','${item.id}')" style="margin-bottom:12px;">
         <button class="btn" onclick="returnLoan('${loan.id}')">${loan.direction==='in' ? 'Oznacz jako oddane właścicielowi' : 'Oznacz jako zwrócone'}</button>
       ` : renderLendBox(item)}
-      <button class="btn secondary" style="margin-top:8px;" onclick="editItem('${item.id}')">Edytuj</button>
-      <button class="btn danger" style="margin-top:8px;" onclick="deleteItem('${item.id}')">Usuń z kolekcji</button>
+      <button class="btn secondary" style="margin-top:8px;" onclick="editItem('${item.id}')">${t('edit')}</button>
+      <button class="btn danger" style="margin-top:8px;" onclick="deleteItem('${item.id}')">${t('delete_item')}</button>
       </div>
     </div>
   `;
@@ -2812,28 +2925,28 @@ function renderLendBox(item){
   if (mode === 'out' || mode === 'in'){
     const isIn = mode === 'in';
     return `
-      <div class="badge ok" style="margin-bottom:12px;">Dostępne</div>
-      <input id="borrower-name" placeholder="${isIn ? 'Od kogo pożyczyłeś?' : 'Komu pożyczasz?'}" onkeydown="if(event.key==='Enter'){event.preventDefault();lendItem('${item.id}','${mode}');}">
-      <label>Data pożyczenia</label>
+      <div class="badge ok" style="margin-bottom:12px;">${t('available')}</div>
+      <input id="borrower-name" placeholder="${isIn ? t('who_borrowed_from') : t('who_lending')}" onkeydown="if(event.key==='Enter'){event.preventDefault();lendItem('${item.id}','${mode}');}">
+      <label>${t('borrow_date')}</label>
       <input type="date" id="borrow-date" value="${todayIso()}" onchange="onBorrowDateChange()">
-      <label>Termin zwrotu</label>
+      <label>${t('due_date')}</label>
       <input type="date" id="due-date-input" value="${toLocalDateInput(new Date(Date.now() + OVERDUE_DAYS*86400000))}">
-      <button class="btn" onclick="lendItem('${item.id}','${mode}')">${isIn ? 'Zapisz' : 'Pożycz'}</button>
-      <button class="btn secondary" style="margin-top:8px;" onclick="cancelLendMode('${item.id}')">Anuluj</button>
+      <button class="btn" onclick="lendItem('${item.id}','${mode}')">${isIn ? t('save') : t('lend_btn')}</button>
+      <button class="btn secondary" style="margin-top:8px;" onclick="cancelLendMode('${item.id}')">${t('cancel')}</button>
     `;
   }
   if (state.scanReturnFeedback){
     return `
       <div class="card" style="text-align:center;padding:22px 16px;background:rgba(61,220,132,.08);border-color:var(--ok);">
-        <div class="badge ok" style="font-size:14px;padding:8px 16px;margin-bottom:12px;">Dostępne</div>
+        <div class="badge ok" style="font-size:14px;padding:8px 16px;margin-bottom:12px;">${t('available')}</div>
         <div style="font-weight:600;">Ta pozycja nie była wypożyczona.</div>
       </div>
     `;
   }
   return `
-    <div class="badge ok" style="margin-bottom:12px;">Dostępne</div>
-    <button class="btn" onclick="setLendMode('${item.id}','out')">Pożycz komuś</button>
-    <button class="btn" style="margin-top:8px;background:var(--warn);color:#1a1a1a;" onclick="setLendMode('${item.id}','in')">Zarejestruj jako pożyczone od kogoś</button>
+    <div class="badge ok" style="margin-bottom:12px;">${t('available')}</div>
+    <button class="btn" onclick="setLendMode('${item.id}','out')">${t('lend_to_someone')}</button>
+    <button class="btn" style="margin-top:8px;background:var(--warn);color:#1a1a1a;" onclick="setLendMode('${item.id}','in')">${t('register_borrowed')}</button>
   `;
 }
 
