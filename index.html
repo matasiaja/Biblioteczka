@@ -2431,9 +2431,11 @@ async function ensureToConsumePositions(){
   const missing = scope.filter(i => i.to_consume_position == null);
   if (!missing.length) return;
   const maxPos = Math.max(0, ...state.items.filter(i=>i.to_consume_position!=null).map(i=>i.to_consume_position));
-  await Promise.all(missing.map((item, idx) =>
+  const results = await Promise.all(missing.map((item, idx) =>
     sb.from('items').update({ to_consume_position: maxPos + idx + 1 }).eq('id', item.id)
   ));
+  const failed = results.find(r => r.error);
+  if (failed){ toast('Błąd zapisu kolejności: ' + failed.error.message); return; }
   await loadAll();
 }
 
