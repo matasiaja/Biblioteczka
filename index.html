@@ -2229,7 +2229,7 @@ function renderList(main){
               <button class="btn small secondary" onclick="deselectAll()">Odznacz wszystko</button>
               <button class="btn small secondary" onclick="cancelSelectMode()">Anuluj</button>
               ${state.listView==='owned' ? `<button class="btn small secondary" onclick="bulkSetWatched(true)" ${state.selectedIds.length===0?'disabled':''}>Oznacz: ${state.typeFilter!=='all' ? CONSUMED_LABELS[state.typeFilter] : 'Obejrzane'}</button>
-              <button class="btn small secondary" onclick="bulkSetWatched(false)" ${state.selectedIds.length===0?'disabled':''}>Cofnij: ${state.typeFilter!=='all' ? CONSUMED_LABELS[state.typeFilter] : 'Obejrzane'}</button>` : ''}
+              <button class="btn small secondary" onclick="bulkSetWatched(false)" ${state.selectedIds.length===0?'disabled':''}>${state.typeFilter!=='all' ? TO_CONSUME_LABELS[state.typeFilter] : 'Do obejrzenia'}</button>` : ''}
               <button class="btn small danger" onclick="bulkDeleteItems()" ${state.selectedIds.length===0?'disabled':''}>Usuń zaznaczone</button>
             </div>
           </div>
