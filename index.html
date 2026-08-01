@@ -945,9 +945,9 @@ function renderLogin(){
       <div style="text-align:center;color:var(--text-dim);font-size:12px;font-family:'IBM Plex Mono',monospace;margin-bottom:24px;">katalog książek, filmów i muzyki</div>
       <div class="card">
         <label>E-mail</label>
-        <input id="login-email" type="email" placeholder="ty@przyklad.pl">
+        <input id="login-email" type="email" placeholder="ty@przyklad.pl" onkeydown="if(event.key==='Enter'){event.preventDefault();login();}">
         <label>Hasło</label>
-        <input id="login-pass" type="password" placeholder="••••••••">
+        <input id="login-pass" type="password" placeholder="••••••••" onkeydown="if(event.key==='Enter'){event.preventDefault();login();}">
         <button class="btn" onclick="login()">Zaloguj się</button>
         <div id="login-err" style="color:var(--danger);font-size:12px;margin-top:10px;"></div>
       </div>
@@ -1669,14 +1669,14 @@ function renderAddForm(main){
       <details style="margin-bottom:14px;">
         <summary style="cursor:pointer;color:var(--text-dim);font-size:12px;font-family:'IBM Plex Mono',monospace;">albo wklej link do zdjęcia</summary>
         <div class="row" style="margin-top:8px;">
-          <input id="f-cover-url" placeholder="wklej link do zdjęcia okładki">
+          <input id="f-cover-url" placeholder="wklej link do zdjęcia okładki" onkeydown="if(event.key==='Enter'){event.preventDefault();setManualCoverUrl();}">
           <button class="btn small secondary" style="flex:0 0 auto;" onclick="setManualCoverUrl()">Ustaw</button>
         </div>
       </details>
       ${(l.barcode || l.editingId || l.type === 'book') ? `
         <label>Kod kreskowy / ISBN${l.checksumOk === false ? ' <span style="color:var(--danger);">(niepoprawna suma kontrolna — błąd odczytu?)</span>' : ''}</label>
         <div class="row">
-          <input id="f-barcode" value="${escapeHtml(l.barcode||'')}" class="mono" placeholder="opcjonalnie — wpisz i wyszukaj" oninput="syncDraftField('barcode', this.value)">
+          <input id="f-barcode" value="${escapeHtml(l.barcode||'')}" class="mono" placeholder="opcjonalnie — wpisz i wyszukaj" oninput="syncDraftField('barcode', this.value)" ${l.editingId ? '' : `onkeydown="if(event.key==='Enter'){event.preventDefault();recheckBarcode();}"`}>
           ${l.editingId ? '' : `<button class="btn small secondary" style="flex:0 0 auto;" onclick="recheckBarcode()">Szukaj</button>`}
         </div>
       ` : ''}
@@ -1743,7 +1743,7 @@ function renderOmdbSearchBox(l){
     <div class="card" style="background:var(--surface-2);margin:0 0 14px;padding:12px;">
       <label>Znajdź dokładne dane filmu (OMDb / IMDb)</label>
       <div class="row">
-        <input id="omdb-search-q" value="${escapeHtml(l.title||'')}" placeholder="Wpisz tytuł filmu">
+        <input id="omdb-search-q" value="${escapeHtml(l.title||'')}" placeholder="Wpisz tytuł filmu" onkeydown="if(event.key==='Enter'){event.preventDefault();doOmdbSearch();}">
         <button class="btn small secondary" style="flex:0 0 auto;" onclick="doOmdbSearch()">Szukaj</button>
       </div>
       <div id="omdb-results"></div>
@@ -1765,9 +1765,9 @@ function renderBookSearchBox(l){
   return `
     <div class="card" style="background:var(--surface-2);margin:0 0 14px;padding:12px;">
       <label>Znajdź książkę po tytule / autorze (Open Library)</label>
-      <input id="book-search-title" value="${escapeHtml(l.title||'')}" placeholder="Tytuł książki">
+      <input id="book-search-title" value="${escapeHtml(l.title||'')}" placeholder="Tytuł książki" onkeydown="if(event.key==='Enter'){event.preventDefault();doBookSearch();}">
       <div class="row">
-        <input id="book-search-author" value="${escapeHtml(l.creator||'')}" placeholder="Autor (opcjonalnie)">
+        <input id="book-search-author" value="${escapeHtml(l.creator||'')}" placeholder="Autor (opcjonalnie)" onkeydown="if(event.key==='Enter'){event.preventDefault();doBookSearch();}">
         <button class="btn small secondary" style="flex:0 0 auto;" onclick="doBookSearch()">Szukaj</button>
       </div>
       <div id="book-search-results"></div>
@@ -1869,7 +1869,7 @@ function renderTmdbSearchBox(l){
     <div class="card" style="background:var(--surface-2);margin:0 0 14px;padding:12px;">
       <label>Znajdź dokładne dane filmu (TMDb — polskie tytuły)</label>
       <div class="row">
-        <input id="tmdb-search-q" value="${escapeHtml(l.title||'')}" placeholder="Wpisz tytuł filmu">
+        <input id="tmdb-search-q" value="${escapeHtml(l.title||'')}" placeholder="Wpisz tytuł filmu" onkeydown="if(event.key==='Enter'){event.preventDefault();doTmdbSearch();}">
         <button class="btn small secondary" style="flex:0 0 auto;" onclick="doTmdbSearch()">Szukaj</button>
       </div>
       <div id="tmdb-results"></div>
@@ -1929,7 +1929,7 @@ function renderMusicBrainzSearchBox(l){
     <div class="card" style="background:var(--surface-2);margin:0 0 14px;padding:12px;">
       <label>Znajdź dokładne dane płyty (MusicBrainz)</label>
       <div class="row">
-        <input id="mb-search-q" value="${escapeHtml(l.title||'')}" placeholder="Wpisz tytuł albumu lub wykonawcę">
+        <input id="mb-search-q" value="${escapeHtml(l.title||'')}" placeholder="Wpisz tytuł albumu lub wykonawcę" onkeydown="if(event.key==='Enter'){event.preventDefault();doMusicBrainzSearch();}">
         <button class="btn small secondary" style="flex:0 0 auto;" onclick="doMusicBrainzSearch()">Szukaj</button>
       </div>
       <div id="mb-results"></div>
@@ -2748,7 +2748,7 @@ function renderLendBox(item){
     const isIn = mode === 'in';
     return `
       <div class="badge ok" style="margin-bottom:12px;">Dostępne</div>
-      <input id="borrower-name" placeholder="${isIn ? 'Od kogo pożyczyłeś?' : 'Komu pożyczasz?'}">
+      <input id="borrower-name" placeholder="${isIn ? 'Od kogo pożyczyłeś?' : 'Komu pożyczasz?'}" onkeydown="if(event.key==='Enter'){event.preventDefault();lendItem('${item.id}','${mode}');}">
       <label>Data pożyczenia</label>
       <input type="date" id="borrow-date" value="${todayIso()}" onchange="onBorrowDateChange()">
       <label>Termin zwrotu</label>
