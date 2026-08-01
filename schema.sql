@@ -241,3 +241,9 @@ as $$
 $$;
 
 grant execute on function get_shared_collection(uuid) to anon;
+
+-- ============================================
+-- MIGRACJA: ręczna kolejność na liście "Do obejrzenia/przeczytania/odsłuchania"
+-- (uruchom ręcznie w SQL Editorze, jeśli baza już istnieje)
+-- ============================================
+alter table items add column if not exists to_consume_position integer;
