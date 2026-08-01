@@ -27,6 +27,12 @@
     --ok:#3DDC84; --warn:#FFB020; --danger:#FF4D4D;
     --radius:14px;
   }
+  :root[data-theme="light"]{
+    --bg:#F3F4F7; --surface:#FFFFFF; --surface-2:#EEF0F4; --border:#DBDFE6;
+    --text:#1A1D23; --text-dim:#6B7280;
+    --accent:#7C5CFF; --accent-dim:#6247CC;
+    --ok:#16875A; --warn:#B36B00; --danger:#D6303F;
+  }
   *{box-sizing:border-box;}
   body{margin:0;background:var(--bg);color:var(--text);font-family:'Space Grotesk',sans-serif;-webkit-font-smoothing:antialiased;}
   .mono{font-family:'IBM Plex Mono',monospace;}
@@ -256,6 +262,7 @@ const I18N = {
     who_lending: 'Komu pożyczasz?', who_borrowed_from: 'Od kogo pożyczyłeś?',
     borrow_date: 'Data pożyczenia', due_date: 'Termin zwrotu', save: 'Zapisz', lend_btn: 'Pożycz', cancel: 'Anuluj',
     email: 'E-mail', password: 'Hasło', login_btn: 'Zaloguj się',
+    appearance: 'Wygląd', dark_theme: 'Ciemny', light_theme: 'Jasny',
     book: 'Książka', movie: 'Film', music: 'Muzyka',
     author_book: 'Autor', author_movie: 'Reżyser', author_music: 'Artysta',
     year_book: 'Rok wydania', year_movie: 'Rok premiery', year_music: 'Rok wydania',
@@ -279,6 +286,7 @@ const I18N = {
     who_lending: 'Who are you lending to?', who_borrowed_from: 'Who did you borrow it from?',
     borrow_date: 'Borrow date', due_date: 'Due date', save: 'Save', lend_btn: 'Lend', cancel: 'Cancel',
     email: 'Email', password: 'Password', login_btn: 'Log in',
+    appearance: 'Appearance', dark_theme: 'Dark', light_theme: 'Light',
     book: 'Book', movie: 'Movie', music: 'Music',
     author_book: 'Author', author_movie: 'Director', author_music: 'Artist',
     year_book: 'Year of publication', year_movie: 'Release year', year_music: 'Year of release',
@@ -302,6 +310,7 @@ const I18N = {
     who_lending: '借给谁？', who_borrowed_from: '从谁那里借的？',
     borrow_date: '借出日期', due_date: '归还期限', save: '保存', lend_btn: '借出', cancel: '取消',
     email: '电子邮件', password: '密码', login_btn: '登录',
+    appearance: '外观', dark_theme: '深色', light_theme: '浅色',
     book: '书籍', movie: '电影', music: '音乐',
     author_book: '作者', author_movie: '导演', author_music: '艺术家',
     year_book: '出版年份', year_movie: '上映年份', year_music: '发行年份',
@@ -333,6 +342,19 @@ function setLocale(loc){
   render();
 }
 
+function applyTheme(){
+  document.documentElement.setAttribute('data-theme', state.theme);
+  const themeColorMeta = document.querySelector('meta[name="theme-color"]');
+  if (themeColorMeta) themeColorMeta.setAttribute('content', state.theme === 'light' ? '#F3F4F7' : '#14161A');
+}
+
+function setTheme(theme){
+  state.theme = theme;
+  localStorage.setItem('bib_theme', theme);
+  applyTheme();
+  renderTab();
+}
+
 let state = {
   attrFilter: null,
   tab: localStorage.getItem('bib_tab') || 'scan',
@@ -346,6 +368,7 @@ let state = {
   scanReturnFeedback: false,
   toConsumeManualSort: localStorage.getItem('bib_to_consume_manual_sort') === '1',
   locale: localStorage.getItem('bib_locale') || 'pl',
+  theme: localStorage.getItem('bib_theme') || 'dark',
   items: [],
   loans: [],
   scannerRunning: false,
@@ -382,6 +405,7 @@ let state = {
   cameFromStats: false
 };
 applyLocaleLabels();
+applyTheme();
 
 const app = document.getElementById('app');
 
@@ -3378,6 +3402,13 @@ function renderSettings(main){
       <div class="section-title">Konto</div>
       <div class="meta" style="margin-bottom:14px;">${escapeHtml(session.user.email)}</div>
       <button class="btn secondary" onclick="logout()">Wyloguj się</button>
+    </div>
+    <div class="card">
+      <div class="section-title">${t('appearance')}</div>
+      <div class="row">
+        <button class="btn ${state.theme==='dark' ? '' : 'secondary'}" onclick="setTheme('dark')">🌙 ${t('dark_theme')}</button>
+        <button class="btn ${state.theme==='light' ? '' : 'secondary'}" onclick="setTheme('light')">☀️ ${t('light_theme')}</button>
+      </div>
     </div>
     <div class="card">
       <div class="section-title">Statystyki</div>
