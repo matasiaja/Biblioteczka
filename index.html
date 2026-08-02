@@ -172,16 +172,25 @@
     .scan-modes button{flex-direction:column;padding:22px 10px;gap:10px;font-size:13px;}
     .scan-modes button svg{width:24px;height:24px;}
     .filter-tiles{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
-    .filter-tiles-types{
+    /* Osiem kafelków w jednej wspólnej siatce 2x4: lewa kolumna Szukaj/Kolekcja/Lista
+       życzeń/Kolejka, prawa kolumna Wszystko/Film/Książka/Muzyka (od góry). */
+    .filter-tiles-combined{
       grid-template-columns:1fr 1fr;
-      grid-template-rows:repeat(3,auto);
-      grid-template-areas:"tall book" "tall movie" "tall music";
-      align-items:stretch;
+      grid-template-rows:repeat(4,auto);
+      grid-template-areas:
+        "search all"
+        "coll movie"
+        "wish book"
+        "queue music";
     }
-    .filter-tiles-types .tile-all{grid-area:tall;aspect-ratio:auto;}
-    .filter-tiles-types .tile-book{grid-area:book;}
-    .filter-tiles-types .tile-movie{grid-area:movie;}
-    .filter-tiles-types .tile-music{grid-area:music;}
+    .filter-tiles-combined .tile-search{grid-area:search;}
+    .filter-tiles-combined .tile-coll{grid-area:coll;}
+    .filter-tiles-combined .tile-wish{grid-area:wish;}
+    .filter-tiles-combined .tile-queue{grid-area:queue;}
+    .filter-tiles-combined .tile-all{grid-area:all;}
+    .filter-tiles-combined .tile-movie{grid-area:movie;}
+    .filter-tiles-combined .tile-book{grid-area:book;}
+    .filter-tiles-combined .tile-music{grid-area:music;}
     .filter-tile{flex-direction:column;padding:16px 8px;gap:8px;font-size:13px;text-align:center;aspect-ratio:1.4/1;}
     .filter-tile svg{width:20px;height:20px;}
     .grid{grid-template-columns:repeat(auto-fill,minmax(168px,1fr));gap:24px;}
@@ -2518,11 +2527,12 @@ function renderList(main){
           <button class="btn small secondary" style="flex:0 0 auto;" onclick="toggleViewMode()" title="${state.viewMode==='grid' ? 'Widok listy' : 'Widok siatki okładek'}">${state.viewMode==='grid' ? icon('list') : icon('grid')}</button>
           <button class="btn small secondary" style="flex:0 0 auto;" onclick="toggleSelectMode()">${state.selectMode ? t('done') : t('select')}</button>
         </div>
-        <div class="filter-tiles">
-          <button class="btn secondary filter-tile" onclick="toggleSearch()" title="Szukaj w kolekcji">${icon('search')}<span>${t('search')}</span></button>
-          <button class="btn filter-tile ${state.listView==='owned'?'':'secondary'}" onclick="setListView('owned')">${icon('book')}<span>${t('collection')}</span></button>
-          <button class="btn filter-tile ${state.listView==='wishlist'?'':'secondary'}" onclick="setListView('wishlist')">${icon('list')}<span>${t('wishlist')}${wishlistCount?` (${wishlistCount})`:''}</span></button>
-          <button class="btn filter-tile ${state.listView==='queue'?'':'secondary'}" onclick="setListView('queue')">${icon('grid')}<span>${t('queue')}${queueCount?` (${queueCount})`:''}</span></button>
+        <div class="filter-tiles filter-tiles-combined">
+          <button class="btn secondary filter-tile tile-search" onclick="toggleSearch()" title="Szukaj w kolekcji">${icon('search')}<span>${t('search')}</span></button>
+          <button class="btn filter-tile tile-coll ${state.listView==='owned'?'':'secondary'}" onclick="setListView('owned')">${icon('book')}<span>${t('collection')}</span></button>
+          <button class="btn filter-tile tile-wish ${state.listView==='wishlist'?'':'secondary'}" onclick="setListView('wishlist')">${icon('list')}<span>${t('wishlist')}${wishlistCount?` (${wishlistCount})`:''}</span></button>
+          <button class="btn filter-tile tile-queue ${state.listView==='queue'?'':'secondary'}" onclick="setListView('queue')">${icon('grid')}<span>${t('queue')}${queueCount?` (${queueCount})`:''}</span></button>
+          ${['all','movie','book','music'].map(tf=>`<button class="btn filter-tile tile-${tf} ${state.typeFilter===tf?'':'secondary'}" onclick="setTypeFilter('${tf}')">${icon(tf==='all'?'grid':tf)}<span>${tf==='all'?t('all'):TYPE_LABELS[tf]} (${counts[tf]})</span></button>`).join('')}
         </div>
         ${state.selectMode ? `
           <div class="card" style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px;padding:12px;flex-wrap:wrap;">
@@ -2537,9 +2547,6 @@ function renderList(main){
             </div>
           </div>
         ` : ''}
-        <div class="filter-tiles filter-tiles-types">
-          ${['all','book','movie','music'].map(tf=>`<button class="btn filter-tile tile-${tf} ${state.typeFilter===tf?'':'secondary'}" onclick="setTypeFilter('${tf}')">${icon(tf==='all'?'grid':tf)}<span>${tf==='all'?t('all'):TYPE_LABELS[tf]} (${counts[tf]})</span></button>`).join('')}
-        </div>
         ${(state.missingFilter==='to_consume' && state.toConsumeManualSort) ? '' : sortSelect()}
         ${missingSelect()}
         ${state.missingFilter==='to_consume' ? `
