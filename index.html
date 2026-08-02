@@ -2004,7 +2004,7 @@ function renderAddForm(main){
       <details style="margin-bottom:14px;">
         <summary style="cursor:pointer;color:var(--text-dim);font-size:12px;font-family:'IBM Plex Mono',monospace;">albo wklej link do zdjęcia</summary>
         <div class="row" style="margin-top:8px;">
-          <input id="f-cover-url" placeholder="wklej link do zdjęcia okładki" onkeydown="if(event.key==='Enter'){event.preventDefault();setManualCoverUrl();}">
+          <input id="f-cover-url" placeholder="wklej link do zdjęcia okładki" onkeydown="if(event.key==='Enter'){event.preventDefault();setManualCoverUrlAndSave();}">
           <button class="btn small secondary" style="flex:0 0 auto;" onclick="setManualCoverUrl()">Ustaw</button>
         </div>
       </details>
@@ -2409,6 +2409,26 @@ function setManualCoverUrl(){
     saveDraft();
     toast('Ustawiono okładkę');
     render();
+  };
+  testImg.onerror = () => {
+    toast('Ten link nie prowadzi bezpośrednio do zdjęcia (np. to strona wyników Google, nie sam plik). Kliknij prawym na obrazek i wybierz "Kopiuj adres obrazu" / "Copy image address", nie "Kopiuj link".');
+  };
+  testImg.src = url;
+}
+
+// Enter w polu linku do okładki: waliduje obrazek jak setManualCoverUrl(), ale od razu
+// zapisuje całą pozycję zamiast tylko ustawiać podgląd — przydatne przy uzupełnianiu
+// brakujących okładek z przefiltrowanej listy (Braki: Zdjęcie), bo saveItem() w tym
+// kontekście sam wraca do tej samej listy, gotowej na kolejną pozycję.
+function setManualCoverUrlAndSave(){
+  const url = document.getElementById('f-cover-url').value.trim();
+  if (!url){ toast('Wklej najpierw adres URL'); return; }
+  toast('Sprawdzam obrazek…');
+  const testImg = new Image();
+  testImg.onload = () => {
+    state.lookup.cover_url = url;
+    saveDraft();
+    saveItem();
   };
   testImg.onerror = () => {
     toast('Ten link nie prowadzi bezpośrednio do zdjęcia (np. to strona wyników Google, nie sam plik). Kliknij prawym na obrazek i wybierz "Kopiuj adres obrazu" / "Copy image address", nie "Kopiuj link".');
