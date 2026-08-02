@@ -174,9 +174,11 @@
     .filter-tiles{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
     .filter-tiles-types{
       grid-template-columns:1fr 1fr;
+      grid-template-rows:repeat(3,auto);
       grid-template-areas:"tall book" "tall movie" "tall music";
+      align-items:stretch;
     }
-    .filter-tiles-types .tile-all{grid-area:tall;height:100%;}
+    .filter-tiles-types .tile-all{grid-area:tall;aspect-ratio:auto;}
     .filter-tiles-types .tile-book{grid-area:book;}
     .filter-tiles-types .tile-movie{grid-area:movie;}
     .filter-tiles-types .tile-music{grid-area:music;}
