@@ -2661,7 +2661,7 @@ function renderQueueList(main){
       <div class="grid">
         ${queued.map((i,idx) => `
           <div class="grid-item-wrap queue-drag-item" data-id="${i.id}" draggable="true"
-               ondragstart="onQueueDragStart(event,'${i.id}')" ondragover="onQueueDragOver(event)"
+               ondragstart="onQueueDragStart(event,'${i.id}')" ondragenter="event.preventDefault();" ondragover="onQueueDragOver(event)"
                ondragleave="onQueueDragLeave(event)" ondrop="onQueueDrop(event,'${i.id}')" ondragend="onQueueDragEnd(event)">
             <span class="queue-rank">${idx+1}</span>
             <div class="grid-item" onclick="openItem('${i.id}')">
@@ -2720,14 +2720,17 @@ function onQueueDragEnd(){
 
 async function onQueueDrop(e, targetId){
   e.preventDefault();
+  e.stopPropagation();
   e.currentTarget.classList.remove('queue-drag-over');
-  const draggedId = queueDragId || e.dataTransfer.getData('text/plain');
+  let draggedId = queueDragId;
+  if (!draggedId){ try { draggedId = e.dataTransfer.getData('text/plain'); } catch(err){} }
   queueDragId = null;
-  if (!draggedId || draggedId === targetId) return;
+  if (!draggedId){ toast('Przeciąganie nie przekazało pozycji źródłowej — spróbuj ponownie.'); return; }
+  if (draggedId === targetId) return;
   const queued = state.items.filter(i => i.queue_position != null).sort((a,b) => a.queue_position - b.queue_position);
   const fromIdx = queued.findIndex(i => i.id === draggedId);
   const toIdx = queued.findIndex(i => i.id === targetId);
-  if (fromIdx === -1 || toIdx === -1) return;
+  if (fromIdx === -1 || toIdx === -1){ toast('Nie znaleziono pozycji w kolejce — odśwież i spróbuj ponownie.'); return; }
   const [moved] = queued.splice(fromIdx, 1);
   queued.splice(toIdx, 0, moved);
   const results = await Promise.all(
