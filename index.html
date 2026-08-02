@@ -137,8 +137,9 @@
   .grid-item-wrap{position:relative;}
   .queue-drag-item{cursor:grab;transition:transform .1s ease,opacity .1s ease;}
   .queue-drag-item:active{cursor:grabbing;}
-  .queue-drag-item.queue-drag-over{transform:scale(1.04);}
+  .grid-item-wrap.queue-drag-item.queue-drag-over{transform:scale(1.04);}
   .queue-drag-item.queue-drag-over .grid-item .cover,.queue-drag-item.queue-drag-over .grid-item .grid-placeholder{box-shadow:0 0 0 3px var(--accent),0 6px 12px rgba(0,0,0,.35);}
+  .item-row.catalog-row.queue-drag-item.queue-drag-over{background:rgba(124,92,255,.15);}
   .queue-rank{position:absolute;top:6px;left:6px;width:22px;height:22px;border-radius:6px;background:rgba(0,0,0,.55);color:#fff;font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;z-index:1;pointer-events:none;}
   .stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(84px,1fr));gap:10px;}
   .stat-tile{background:var(--surface-2);border-radius:10px;padding:12px 10px;text-align:center;cursor:pointer;transition:background .15s,transform .1s;}
@@ -2557,7 +2558,7 @@ function renderList(main){
         ${(state.missingFilter==='to_consume' && state.toConsumeManualSort) ? '' : sortSelect()}
         ${missingSelect()}
         ${state.missingFilter==='to_consume' ? `
-          <button class="btn ${state.toConsumeManualSort ? '' : 'secondary'}" style="margin-bottom:10px;" onclick="toggleToConsumeManualSort()" title="Ustaw własną kolejność strzałkami góra/dół na liście">${state.toConsumeManualSort ? '✓ ' : ''}${t('manual_order')}</button>
+          <button class="btn ${state.toConsumeManualSort ? '' : 'secondary'}" style="margin-bottom:10px;" onclick="toggleToConsumeManualSort()" title="Przeciągnij wiersze na liście, żeby ustawić własną kolejność">${state.toConsumeManualSort ? '✓ ' : ''}${t('manual_order')}</button>
         ` : ''}
       </div>
       <div class="list-results">
@@ -2594,12 +2595,12 @@ function renderList(main){
                   : i.watched ? `<span class="badge ok">${CONSUMED_LABELS[i.type]}</span>`
                   : `<span class="badge ok">${t('available')}</span>`;
                 const checkCell = manualReorder
-                  ? `<div style="display:flex;flex-direction:column;gap:2px;" onclick="event.stopPropagation();">
-                      <button class="btn small secondary" style="padding:2px 8px;" onclick="moveToConsumeItem('${i.id}',-1)" ${idx===0?'disabled':''}>↑</button>
-                      <button class="btn small secondary" style="padding:2px 8px;" onclick="moveToConsumeItem('${i.id}',1)" ${idx===filtered.length-1?'disabled':''}>↓</button>
-                    </div>`
+                  ? `<span class="mono" style="color:var(--text-dim);cursor:grab;" title="Przeciągnij, żeby zmienić kolejność">${idx+1}. ⠿</span>`
                   : (state.selectMode ? `<input type="checkbox" ${checked?'checked':''} onclick="event.stopPropagation();toggleSelect('${i.id}')" style="width:18px;height:18px;flex-shrink:0;margin:0;">` : '');
-                return `<div class="item-row catalog-row" ${manualReorder ? 'style="grid-template-columns:56px 56px 1fr 100px 120px 64px 150px;"' : ''} onclick="${state.selectMode ? `toggleSelect('${i.id}')` : `openItem('${i.id}')`}">
+                const dragAttrs = manualReorder
+                  ? `draggable="true" ondragstart="onToConsumeDragStart(event,'${i.id}')" ondragenter="event.preventDefault();" ondragover="onToConsumeDragOver(event)" ondragleave="onToConsumeDragLeave(event)" ondrop="onToConsumeDrop(event,'${i.id}')" ondragend="onToConsumeDragEnd(event)"`
+                  : '';
+                return `<div class="item-row catalog-row${manualReorder ? ' queue-drag-item' : ''}" ${manualReorder ? 'style="grid-template-columns:56px 56px 1fr 100px 120px 64px 150px;"' : ''} ${dragAttrs} onclick="${state.selectMode ? `toggleSelect('${i.id}')` : `openItem('${i.id}')`}">
                   <div class="row-col-check">${checkCell}</div>
                   ${i.cover_url ? coverImg(i.cover_url, null, i.type) : `<div class="cover${i.type==='music'?' square':''}" style="display:flex;align-items:center;justify-content:center;color:var(--text-dim);">${icon(i.type)}</div>`}
                   <div class="row-title">
@@ -2818,15 +2819,54 @@ async function ensureToConsumePositions(){
   await loadAll();
 }
 
-async function moveToConsumeItem(itemId, direction){
+// Przeciąganie wierszy w trybie "Kolejność ręczna" — jedyny sposób zmiany kolejności tam
+// (bez strzałek), ten sam mechanizm co przeciąganie w Kolejce (patrz onQueueDrop).
+let toConsumeDragId = null;
+
+function onToConsumeDragStart(e, id){
+  toConsumeDragId = id;
+  e.dataTransfer.effectAllowed = 'move';
+  try { e.dataTransfer.setData('text/plain', id); } catch(err){}
+}
+
+function onToConsumeDragOver(e){
+  e.preventDefault();
+  e.dataTransfer.dropEffect = 'move';
+  e.currentTarget.classList.add('queue-drag-over');
+}
+
+function onToConsumeDragLeave(e){
+  e.currentTarget.classList.remove('queue-drag-over');
+}
+
+function onToConsumeDragEnd(){
+  toConsumeDragId = null;
+  document.querySelectorAll('.queue-drag-over').forEach(el => el.classList.remove('queue-drag-over'));
+}
+
+async function onToConsumeDrop(e, targetId){
+  e.preventDefault();
+  e.stopPropagation();
+  e.currentTarget.classList.remove('queue-drag-over');
+  let draggedId = toConsumeDragId;
+  if (!draggedId){ try { draggedId = e.dataTransfer.getData('text/plain'); } catch(err){} }
+  toConsumeDragId = null;
+  if (!draggedId){ toast('Przeciąganie nie przekazało pozycji źródłowej — spróbuj ponownie.'); return; }
+  if (draggedId === targetId) return;
   const ordered = toConsumeScope().sort((a,b) => (a.to_consume_position ?? Infinity) - (b.to_consume_position ?? Infinity));
-  const idx = ordered.findIndex(i => i.id === itemId);
-  const swapIdx = idx + direction;
-  if (idx === -1 || swapIdx < 0 || swapIdx >= ordered.length) return;
-  const a = ordered[idx], b = ordered[swapIdx];
-  const { error } = await sb.from('items').update({ to_consume_position: b.to_consume_position }).eq('id', a.id);
-  if (error){ toast('Błąd: ' + error.message); return; }
-  await sb.from('items').update({ to_consume_position: a.to_consume_position }).eq('id', b.id);
+  const fromIdx = ordered.findIndex(i => i.id === draggedId);
+  const toIdx = ordered.findIndex(i => i.id === targetId);
+  if (fromIdx === -1 || toIdx === -1){ toast('Nie znaleziono pozycji — odśwież i spróbuj ponownie.'); return; }
+  const [moved] = ordered.splice(fromIdx, 1);
+  ordered.splice(toIdx, 0, moved);
+  const results = await Promise.all(
+    ordered.map((item, idx) => item.to_consume_position !== idx + 1
+      ? sb.from('items').update({ to_consume_position: idx + 1 }).eq('id', item.id)
+      : null
+    ).filter(Boolean)
+  );
+  const failed = results.find(r => r && r.error);
+  if (failed){ toast('Błąd: ' + failed.error.message); return; }
   await loadAll();
   renderTab();
 }
