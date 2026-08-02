@@ -54,6 +54,8 @@
   .btn.secondary:active{background:rgba(148,163,184,.1);box-shadow:0 1px 0 rgba(0,0,0,.5),inset 0 4px 8px rgba(0,0,0,.4);transform:translateY(5px);}
   .btn.danger{background:linear-gradient(180deg,#ff9494,var(--danger) 55%,#d63c3c);box-shadow:0 6px 0 #8a2424,0 10px 18px rgba(0,0,0,.45),inset 0 1px 0 rgba(255,255,255,.45),inset 0 -3px 6px rgba(0,0,0,.2);}
   .btn.danger:active{background:linear-gradient(180deg,var(--danger),#8a2424);box-shadow:0 1px 0 #8a2424,inset 0 4px 8px rgba(0,0,0,.5);transform:translateY(5px);}
+  .btn.mint{background:linear-gradient(180deg,#6ff0bd,var(--ok) 55%,#0f7a4a);box-shadow:0 6px 0 #0a5c38,0 10px 18px rgba(0,0,0,.45),inset 0 1px 0 rgba(255,255,255,.45),inset 0 -3px 6px rgba(0,0,0,.2);}
+  .btn.mint:active{background:linear-gradient(180deg,var(--ok),#0a5c38);box-shadow:0 1px 0 #0a5c38,inset 0 4px 8px rgba(0,0,0,.5);transform:translateY(5px);}
   .btn.small{width:auto;padding:9px 14px;font-size:13px;}
   .btn:disabled{opacity:.5;cursor:default;box-shadow:none;transform:none;}
   .btn svg{width:18px;height:18px;flex-shrink:0;}
@@ -2528,10 +2530,10 @@ function renderList(main){
           <button class="btn small secondary" style="flex:0 0 auto;" onclick="toggleSelectMode()">${state.selectMode ? t('done') : t('select')}</button>
         </div>
         <div class="filter-tiles filter-tiles-combined">
-          <button class="btn secondary filter-tile tile-search" onclick="toggleSearch()" title="Szukaj w kolekcji">${icon('search')}<span>${t('search')}</span></button>
-          <button class="btn filter-tile tile-coll ${state.listView==='owned'?'':'secondary'}" onclick="setListView('owned')">${icon('book')}<span>${t('collection')}</span></button>
-          <button class="btn filter-tile tile-wish ${state.listView==='wishlist'?'':'secondary'}" onclick="setListView('wishlist')">${icon('list')}<span>${t('wishlist')}${wishlistCount?` (${wishlistCount})`:''}</span></button>
-          <button class="btn filter-tile tile-queue ${state.listView==='queue'?'':'secondary'}" onclick="setListView('queue')">${icon('grid')}<span>${t('queue')}${queueCount?` (${queueCount})`:''}</span></button>
+          <button class="btn filter-tile tile-search ${state.searchMode?'mint':'secondary'}" onclick="toggleSearch()" title="Szukaj w kolekcji">${icon('search')}<span>${t('search')}</span></button>
+          <button class="btn filter-tile tile-coll ${state.listView==='owned'?'mint':'secondary'}" onclick="setListView('owned')">${icon('book')}<span>${t('collection')}</span></button>
+          <button class="btn filter-tile tile-wish ${state.listView==='wishlist'?'mint':'secondary'}" onclick="setListView('wishlist')">${icon('list')}<span>${t('wishlist')}${wishlistCount?` (${wishlistCount})`:''}</span></button>
+          <button class="btn filter-tile tile-queue ${state.listView==='queue'?'mint':'secondary'}" onclick="setListView('queue')">${icon('grid')}<span>${t('queue')}${queueCount?` (${queueCount})`:''}</span></button>
           ${['all','movie','book','music'].map(tf=>`<button class="btn filter-tile tile-${tf} ${state.typeFilter===tf?'':'secondary'}" onclick="setTypeFilter('${tf}')">${icon(tf==='all'?'grid':tf)}<span>${tf==='all'?t('all'):TYPE_LABELS[tf]} (${counts[tf]})</span></button>`).join('')}
         </div>
         ${state.selectMode ? `
