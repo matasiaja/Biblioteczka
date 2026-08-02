@@ -237,9 +237,12 @@
     .record-row dd{margin:0;padding:9px 14px;font-size:13px;display:flex;align-items:center;}
   }
   /* Tabela katalogowa reaguje na dostępną szerokość .list-results (container query, nie
-     viewport) — gdy okno się zwęża, kolumny Rodzaj/Format/Rok znikają, a tytuł + meta +
-     status układają się jedna pod drugą zamiast ściskać się w coraz węższe kolumny. */
-  @container (max-width: 640px){
+     viewport) — kolumny Rodzaj/Format/Rok znikają, a tytuł + meta + status układają się
+     jedna pod drugą zamiast ściskać się w coraz węższe kolumny. Próg jest wysoki celowo:
+     main{max-width:1160px} minus panel filtrów (300px) i odstęp nigdy realnie nie daje
+     .list-results więcej niż ok. 760px, więc pełna wielokolumnowa tabela nigdy nie miała
+     tam szans wyglądać dobrze — układ skrócony jest efektywnie zawsze aktywny. */
+  @container (max-width: 900px){
     .item-row-header{display:none;}
     .catalog-row{
       grid-template-columns:34px 56px 1fr !important;
