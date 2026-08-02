@@ -172,7 +172,9 @@
     .scan-modes button{flex-direction:column;padding:22px 10px;gap:10px;font-size:13px;}
     .scan-modes button svg{width:24px;height:24px;}
     .filter-tiles{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+    .filter-tiles-types{grid-template-columns:1fr;}
     .filter-tile{flex-direction:column;padding:16px 8px;gap:8px;font-size:13px;text-align:center;aspect-ratio:1.4/1;}
+    .filter-tiles-types .filter-tile{flex-direction:row;justify-content:flex-start;aspect-ratio:auto;padding:12px 16px;}
     .filter-tile svg{width:20px;height:20px;}
     .grid{grid-template-columns:repeat(auto-fill,minmax(168px,1fr));gap:24px;}
     /* Widok listy jako prawdziwa tabela katalogowa: kolumny Okładka / Tytuł-Autor /
@@ -2527,7 +2529,7 @@ function renderList(main){
             </div>
           </div>
         ` : ''}
-        <div class="filter-tiles">
+        <div class="filter-tiles filter-tiles-types">
           ${['all','book','movie','music'].map(tf=>`<button class="btn filter-tile ${state.typeFilter===tf?'':'secondary'}" onclick="setTypeFilter('${tf}')">${icon(tf==='all'?'grid':tf)}<span>${tf==='all'?t('all'):TYPE_LABELS[tf]} (${counts[tf]})</span></button>`).join('')}
         </div>
         ${(state.missingFilter==='to_consume' && state.toConsumeManualSort) ? '' : sortSelect()}
