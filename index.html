@@ -2470,11 +2470,24 @@ async function saveItem(allowDuplicate){
   if (payload.watched) await renumberQueue();
   const wasEditing = l.editingId;
   const savedId = l.editingId || (data && data.id);
+  // Edytowanie pozycji z listy przefiltrowanej po "Braki: X" (np. brak okładki) ma po
+  // zapisaniu wracać do tej samej przefiltrowanej listy, a nie otwierać kartę tej
+  // pozycji — żeby można było lecieć dalej po kolejnych brakujących pozycjach bez
+  // ręcznego wracania za każdym razem. state.tab/listView/typeFilter/missingFilter nie są
+  // nigdzie ruszane między otwarciem karty a edycją, więc wciąż wskazują tamten widok.
+  const returnToMissingFilter = wasEditing &&
+    state.tab === 'list' &&
+    !['none', 'to_consume', 'queue'].includes(state.missingFilter);
   setLookup(null);
   toast(wasEditing ? 'Zapisano zmiany' : 'Dodano do kolekcji');
-  render();
-  if (!wasEditing && state.batchScanMode && state.tab === 'scan' && !isDesktopDevice()) beginScan();
-  else if (savedId) openItem(savedId);
+  if (returnToMissingFilter){
+    state.openItemId = null;
+    renderTab();
+  } else {
+    render();
+    if (!wasEditing && state.batchScanMode && state.tab === 'scan' && !isDesktopDevice()) beginScan();
+    else if (savedId) openItem(savedId);
+  }
 }
 
 // ---------------- KOLEKCJA TAB ----------------
