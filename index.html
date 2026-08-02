@@ -233,8 +233,24 @@
        do góry obszaru przewijania (position:sticky), więc nie ucieka razem z okładkami. */
     .list-layout{display:flex;gap:32px;align-items:flex-start;}
     .list-filters{flex:0 0 300px;position:sticky;top:20px;}
-    .list-results{flex:1;min-width:0;}
+    .list-results{flex:1;min-width:0;container-type:inline-size;}
     .record-row dd{margin:0;padding:9px 14px;font-size:13px;display:flex;align-items:center;}
+  }
+  /* Tabela katalogowa reaguje na dostępną szerokość .list-results (container query, nie
+     viewport) — gdy okno się zwęża, kolumny Rodzaj/Format/Rok znikają, a tytuł + meta +
+     status układają się jedna pod drugą zamiast ściskać się w coraz węższe kolumny. */
+  @container (max-width: 640px){
+    .item-row-header{display:none;}
+    .catalog-row{
+      grid-template-columns:34px 56px 1fr !important;
+      grid-template-areas:"chk cov title" "chk cov status";
+      row-gap:6px;
+    }
+    .catalog-row .row-col-check{grid-area:chk;}
+    .catalog-row > .cover{grid-area:cov;}
+    .catalog-row .row-title{grid-area:title;}
+    .catalog-row .row-col-type,.catalog-row .row-col-format,.catalog-row .row-col-year{display:none;}
+    .catalog-row .row-col-status{grid-area:status;justify-content:flex-start;}
   }
 </style>
 </head>
