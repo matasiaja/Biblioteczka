@@ -435,6 +435,8 @@ let state = {
   selectedLoanIds: [],
   searchMode: false,
   searchQuery: '',
+  searchYear: '',
+  searchFormat: '',
   dismissedLoanAlert: false,
   loanAlertBannerEnabled: localStorage.getItem('bib_loan_alert_banner') === '1',
   showLoanHistory: false,
@@ -3033,8 +3035,11 @@ function renderAttrFilter(main){
 // ---------------- SZUKAJ (dostępne z każdego ekranu) ----------------
 function toggleSearch(){
   state.searchMode = !state.searchMode;
-  if (!state.searchMode) state.searchQuery = '';
-  else window.history.pushState({ view: 'search' }, '');
+  if (!state.searchMode){
+    state.searchQuery = '';
+    state.searchYear = '';
+    state.searchFormat = '';
+  } else window.history.pushState({ view: 'search' }, '');
   render();
 }
 
@@ -3053,24 +3058,57 @@ function clearSearchQuery(){
   if (el) el.focus();
 }
 
+function onSearchYearInput(){
+  const el = document.getElementById('search-year');
+  state.searchYear = el.value;
+  renderTab();
+  const moved = document.getElementById('search-year');
+  if (moved){ moved.focus(); moved.setSelectionRange(moved.value.length, moved.value.length); }
+}
+
+function onSearchFormatChange(){
+  state.searchFormat = document.getElementById('search-format').value;
+  renderTab();
+}
+
 function renderSearch(main){
   const q = (state.searchQuery || '').trim().toLowerCase();
-  const results = sortByField(q ? state.items.filter(i =>
-    (i.title||'').toLowerCase().includes(q) ||
-    (i.creator||'').toLowerCase().includes(q) ||
-    (i.publisher||'').toLowerCase().includes(q) ||
-    (i.barcode||'').toLowerCase().includes(q) ||
-    (i.index_number||'').toLowerCase().includes(q)
+  const yearQ = (state.searchYear || '').trim();
+  const formatQ = state.searchFormat || '';
+  const hasFilter = !!(q || yearQ || formatQ);
+  const results = sortByField(hasFilter ? state.items.filter(i =>
+    (!q || (i.title||'').toLowerCase().includes(q) ||
+      (i.creator||'').toLowerCase().includes(q) ||
+      (i.publisher||'').toLowerCase().includes(q) ||
+      (i.barcode||'').toLowerCase().includes(q) ||
+      (i.index_number||'').toLowerCase().includes(q)) &&
+    (!yearQ || String(i.year||'') === yearQ) &&
+    (!formatQ || i.format === formatQ)
   ) : []);
   main.innerHTML = `
-    <div style="position:relative;margin-bottom:14px;">
+    <div style="position:relative;margin-bottom:10px;">
       <input id="search-q" value="${escapeHtml(state.searchQuery||'')}" placeholder="Szukaj: tytuł, autor, wydawnictwo, kod…" oninput="onSearchInput()" style="margin-bottom:0;${state.searchQuery ? 'padding-right:44px;' : ''}">
       ${state.searchQuery ? `<button type="button" onclick="clearSearchQuery()" aria-label="Wyczyść pole" title="Wyczyść i przygotuj do kolejnego skanu" style="position:absolute;right:6px;top:50%;transform:translateY(-50%);width:32px;height:32px;border:none;background:var(--surface);color:var(--text-dim);border-radius:8px;font-size:16px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;">✕</button>` : ''}
     </div>
-    ${q ? sortSelect() : ''}
+    <div class="row" style="margin-bottom:14px;">
+      <input id="search-year" value="${escapeHtml(state.searchYear||'')}" placeholder="Rok" inputmode="numeric" oninput="onSearchYearInput()" style="margin-bottom:0;">
+      <select id="search-format" onchange="onSearchFormatChange()" style="margin-bottom:0;">
+        <option value="">Format: wszystkie</option>
+        <optgroup label="${TYPE_LABELS.book}">
+          ${TYPE_FORMATS.book.map(f=>`<option value="${escapeHtml(f)}" ${state.searchFormat===f?'selected':''}>${escapeHtml(f)}</option>`).join('')}
+        </optgroup>
+        <optgroup label="${TYPE_LABELS.movie}">
+          ${TYPE_FORMATS.movie.map(f=>`<option value="${escapeHtml(f)}" ${state.searchFormat===f?'selected':''}>${escapeHtml(f)}</option>`).join('')}
+        </optgroup>
+        <optgroup label="${TYPE_LABELS.music}">
+          ${TYPE_FORMATS.music.map(f=>`<option value="${escapeHtml(f)}" ${state.searchFormat===f?'selected':''}>${escapeHtml(f)}</option>`).join('')}
+        </optgroup>
+      </select>
+    </div>
+    ${hasFilter ? sortSelect() : ''}
     <div class="card">
-      ${!q ? `<div class="empty">Zacznij pisać, żeby przeszukać całą kolekcję.</div>` :
-        results.length===0 ? `<div class="empty">Brak wyników dla "${escapeHtml(state.searchQuery)}"</div>` :
+      ${!hasFilter ? `<div class="empty">Zacznij pisać, wpisz rok albo wybierz format, żeby przeszukać całą kolekcję.</div>` :
+        results.length===0 ? `<div class="empty">Brak wyników.</div>` :
         results.map(i=>{
           const loan = activeLoanFor(i.id);
           return `<div class="item-row" onclick="openItem('${i.id}')">
