@@ -247,3 +247,22 @@ grant execute on function get_shared_collection(uuid) to anon;
 -- (uruchom ręcznie w SQL Editorze, jeśli baza już istnieje)
 -- ============================================
 alter table items add column if not exists to_consume_position integer;
+
+-- ============================================
+-- MIGRACJA: cache wyników skanowania kodu kreskowego (uruchom ręcznie w SQL Editorze,
+-- jeśli baza już istnieje)
+-- Zapisuje udany wynik rozpoznania kodu (UPCitemdb/OMDb/MusicBrainz/Discogs), żeby ponowne
+-- zeskanowanie tego samego kodu (np. po usunięciu i ponownym dodaniu pozycji) nie zużywało
+-- kolejnego zapytania z dziennego limitu UPCitemdb (~100/dzień, bez klucza).
+-- ============================================
+create table if not exists barcode_lookup_cache (
+  barcode text primary key,
+  guess jsonb not null,
+  created_at timestamptz not null default now()
+);
+
+alter table barcode_lookup_cache enable row level security;
+
+drop policy if exists "auth_full_access" on barcode_lookup_cache;
+create policy "auth_full_access" on barcode_lookup_cache for all
+  to authenticated using (true) with check (true);

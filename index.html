@@ -1528,6 +1528,21 @@ function logStep(source, status){
   lookupLog.push({ source, status });
 }
 
+// Cache udanych wyników skanowania kodu kreskowego (tabela barcode_lookup_cache) — dzięki
+// temu ponowne zeskanowanie tego samego kodu (np. po usunięciu i ponownym dodaniu pozycji)
+// nie zużywa kolejnego zapytania z dziennego limitu UPCitemdb (~100/dzień, bez klucza).
+async function getCachedLookup(code){
+  try {
+    const { data } = await sb.from('barcode_lookup_cache').select('guess').eq('barcode', code).maybeSingle();
+    return data ? data.guess : null;
+  } catch(e){ return null; }
+}
+async function setCachedLookup(code, guess){
+  try {
+    await sb.from('barcode_lookup_cache').upsert({ barcode: code, guess });
+  } catch(e){ /* cache jest tylko optymalizacją — błąd zapisu nie powinien przerywać skanowania */ }
+}
+
 async function onBarcode(code){
   await stopScanner();
   const existing = state.items.find(i => i.barcode === code);
@@ -1579,10 +1594,17 @@ async function onBarcode(code){
     toast(`Kod ${code} ma niepoprawną sumę kontrolną — kamera prawdopodobnie źle odczytała cyfrę. Popraw go poniżej albo zeskanuj jeszcze raz.`);
   }
   let guess = { type: 'book', title: '', creator: '', publisher: '', format: '', year: '', cover_url: '' };
-  if (isIsbn(code)){
+  const cached = await getCachedLookup(code);
+  if (cached){
+    guess = cached;
+    logStep('Cache', 'użyto zapisanego wcześniej wyniku');
+    toast('Użyto wcześniej zapisanych danych dla tego kodu');
+  } else if (isIsbn(code)){
     guess = await lookupBook(code) || guess;
+    if (guess.title) setCachedLookup(code, guess);
   } else if (looksLikeBarcode(code)){
     guess = await lookupBarcodeGeneral(code) || guess;
+    if (guess.title) setCachedLookup(code, guess);
   } else {
     // Nie jest to numeryczny kod kreskowy/ISBN (np. ktoś wpisał tu tytuł) — wysłanie tego jako
     // "barcode:" do MusicBrainz/Discogs potrafi trafić przypadkowym dopasowaniem tekstowym
@@ -1891,6 +1913,11 @@ async function lookupBarcodeGeneral(code){
         if (omdb) guess = { ...guess, ...omdb };
       }
       return guess;
+    }
+    if (data.code === 'EXCEED_LIMIT' || res.status === 429){
+      logStep('UPCitemdb', 'dzienny limit zapytań wyczerpany');
+      toast('Dzienny limit zapytań do bazy kodów kreskowych (UPCitemdb) jest wyczerpany — spróbuj później albo uzupełnij dane ręcznie poniżej');
+      return { type: 'movie', title: '', creator: '', format: '', year: '', cover_url: '' };
     }
     logStep('UPCitemdb', 'nie znaleziono');
   } catch(e){ logStep('UPCitemdb', 'błąd sieci'); }
