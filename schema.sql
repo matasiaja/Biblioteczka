@@ -9,7 +9,7 @@ create table items (
   id uuid primary key default gen_random_uuid(),
   barcode text unique,
   index_number text,          -- numer "Indeks" drukowany na polskich książkach obok kodu kreskowego
-  type text not null check (type in ('book','movie','music')),
+  type text not null check (type in ('book','movie','music','videogame','boardgame')),
   title text not null,
   creator text,              -- autor / reżyser / artysta
   publisher text,             -- wydawnictwo (tylko książki)
@@ -266,3 +266,12 @@ alter table barcode_lookup_cache enable row level security;
 drop policy if exists "auth_full_access" on barcode_lookup_cache;
 create policy "auth_full_access" on barcode_lookup_cache for all
   to authenticated using (true) with check (true);
+
+-- ============================================
+-- MIGRACJA: nowe rodzaje pozycji — gry wideo i gry planszowe (uruchom ręcznie
+-- w SQL Editorze, jeśli baza już istnieje — powyższy `create table items` już
+-- zawiera te wartości dla nowych instalacji)
+-- ============================================
+alter table items drop constraint if exists items_type_check;
+alter table items add constraint items_type_check
+  check (type in ('book','movie','music','videogame','boardgame'));

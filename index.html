@@ -104,6 +104,10 @@
   .filter-tiles{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px;}
   .filter-tile{width:auto;flex:1;display:flex;align-items:center;justify-content:center;gap:6px;padding:9px;font-size:12px;}
   .filter-tile svg{width:16px;height:16px;flex-shrink:0;}
+  /* Na telefonie filter-col znika (display:contents) — przyciski wpadają luzem do
+     .filter-tiles i zawijają się jak zwykle. Na desktopie (patrz media query niżej)
+     robi się z tego osobna kolumna. */
+  .filter-col{display:contents;}
   /* scanner */
   #reader{width:100%;border-radius:var(--radius);overflow:hidden;background:#000;position:relative;}
   .scan-frame{position:relative;}
@@ -180,25 +184,13 @@
     .scan-modes button{flex-direction:column;padding:22px 10px;gap:10px;font-size:13px;}
     .scan-modes button svg{width:24px;height:24px;}
     .filter-tiles{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
-    /* Osiem kafelków w jednej wspólnej siatce 2x4: lewa kolumna Szukaj/Kolekcja/Lista
-       życzeń/Kolejka, prawa kolumna Wszystko/Film/Książka/Muzyka (od góry). */
-    .filter-tiles-combined{
-      grid-template-columns:1fr 1fr;
-      grid-template-rows:repeat(4,auto);
-      grid-template-areas:
-        "search all"
-        "coll movie"
-        "wish book"
-        "queue music";
-    }
-    .filter-tiles-combined .tile-search{grid-area:search;}
-    .filter-tiles-combined .tile-coll{grid-area:coll;}
-    .filter-tiles-combined .tile-wish{grid-area:wish;}
-    .filter-tiles-combined .tile-queue{grid-area:queue;}
-    .filter-tiles-combined .tile-all{grid-area:all;}
-    .filter-tiles-combined .tile-movie{grid-area:movie;}
-    .filter-tiles-combined .tile-book{grid-area:book;}
-    .filter-tiles-combined .tile-music{grid-area:music;}
+    /* Lewa kolumna (Szukaj/Kolekcja/Lista życzeń/Kolejka) jako pojedynczy stos, prawa
+       kolumna (Wszystko + wszystkie rodzaje) jako własna siatka 3-kolumnowa, żeby liczba
+       rodzajów (dziś: Film/Książka/Muzyka/Gra wideo/Gra planszowa) mogła rosnąć bez
+       przebudowywania układu — patrz .filter-col (display:contents na telefonie). */
+    .filter-tiles-combined{grid-template-columns:1fr 1.6fr;align-items:start;}
+    .filter-tiles-combined .filter-col-actions{display:flex;flex-direction:column;gap:10px;}
+    .filter-tiles-combined .filter-col-types{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;}
     .filter-tile{flex-direction:column;padding:16px 8px;gap:8px;font-size:13px;text-align:center;aspect-ratio:1.4/1;}
     .filter-tile svg{width:20px;height:20px;}
     .grid{grid-template-columns:repeat(auto-fill,minmax(168px,1fr));gap:24px;}
@@ -274,16 +266,37 @@ const FUNCTIONS_BASE = "https://biblioteczka-functions.mathyus-823.workers.dev";
 
 let sb = null;
 let session = null;
-const TYPE_LABELS = { book: 'Książka', movie: 'Film', music: 'Muzyka' };
+const TYPE_LABELS = { book: 'Książka', movie: 'Film', music: 'Muzyka', videogame: 'Gra wideo', boardgame: 'Gra planszowa' };
+// Podkategorie gier wideo (pole "Format") — pogrupowane w renderVideogameFormatSelect()
+// na konsole / komputery / mini konsole przenośne (patrz VIDEOGAME_FORMAT_GROUPS).
+const VIDEOGAME_FORMAT_GROUPS = {
+  'Konsole': [
+    'Atari 2600', 'Atari 5200', 'Atari 7800', 'ColecoVision', 'Intellivision', '3DO', 'Neo Geo AES',
+    'NES', 'SNES', 'Nintendo 64', 'GameCube', 'Wii', 'Wii U', 'Nintendo Switch', 'Nintendo Switch 2',
+    'Sega Master System', 'Sega Mega Drive / Genesis', 'Sega Saturn', 'Sega Dreamcast',
+    'PlayStation', 'PlayStation 2', 'PlayStation 3', 'PlayStation 4', 'PlayStation 5',
+    'Xbox', 'Xbox 360', 'Xbox One', 'Xbox Series X/S'
+  ],
+  'Komputery': [
+    'PC (Windows)', 'Mac', 'Commodore 64', 'Amiga', 'Atari ST', 'ZX Spectrum', 'MSX', 'DOS'
+  ],
+  'Mini konsole przenośne': [
+    'Game Boy', 'Game Boy Color', 'Game Boy Advance', 'Nintendo DS', 'Nintendo 3DS',
+    'Sega Game Gear', 'Atari Lynx', 'Neo Geo Pocket', 'PlayStation Portable (PSP)', 'PlayStation Vita',
+    'Steam Deck', 'NES Classic Mini', 'SNES Classic Mini', 'PlayStation Classic', 'Sega Genesis Mini'
+  ]
+};
 const TYPE_FORMATS = {
   book: ['papierowa miękka', 'papierowa twarda'],
   movie: ['DVD', 'Blu-ray', 'VHS'],
-  music: ['CD', 'winyl', 'kaseta']
+  music: ['CD', 'winyl', 'kaseta'],
+  videogame: Object.values(VIDEOGAME_FORMAT_GROUPS).flat(),
+  boardgame: ['gra podstawowa', 'dodatek']
 };
-const CREATOR_LABELS = { book: 'Autor', movie: 'Reżyser', music: 'Artysta' };
-const YEAR_LABELS = { book: 'Rok wydania', movie: 'Rok premiery', music: 'Rok wydania' };
-const CONSUMED_LABELS = { book: 'Przeczytane', movie: 'Obejrzane', music: 'Odsłuchane' };
-const TO_CONSUME_LABELS = { book: 'Do przeczytania', movie: 'Do obejrzenia', music: 'Do odsłuchania' };
+const CREATOR_LABELS = { book: 'Autor', movie: 'Reżyser', music: 'Artysta', videogame: 'Producent', boardgame: 'Autor' };
+const YEAR_LABELS = { book: 'Rok wydania', movie: 'Rok premiery', music: 'Rok wydania', videogame: 'Rok wydania', boardgame: 'Rok wydania' };
+const CONSUMED_LABELS = { book: 'Przeczytane', movie: 'Obejrzane', music: 'Odsłuchane', videogame: 'Ukończona', boardgame: 'Zagrana' };
+const TO_CONSUME_LABELS = { book: 'Do przeczytania', movie: 'Do obejrzenia', music: 'Do odsłuchania', videogame: 'Do ukończenia', boardgame: 'Do zagrania' };
 
 // ---------------- I18N ----------------
 // Tłumaczenia głównego interfejsu (nawigacja, przyciski, etykiety, nagłówki tabel).
@@ -309,11 +322,11 @@ const I18N = {
     borrow_date: 'Data pożyczenia', due_date: 'Termin zwrotu', save: 'Zapisz', lend_btn: 'Pożycz', cancel: 'Anuluj',
     email: 'E-mail', password: 'Hasło', login_btn: 'Zaloguj się',
     appearance: 'Wygląd', dark_theme: 'Ciemny', light_theme: 'Jasny',
-    book: 'Książka', movie: 'Film', music: 'Muzyka',
-    author_book: 'Autor', author_movie: 'Reżyser', author_music: 'Artysta',
-    year_book: 'Rok wydania', year_movie: 'Rok premiery', year_music: 'Rok wydania',
-    consumed_book: 'Przeczytane', consumed_movie: 'Obejrzane', consumed_music: 'Odsłuchane',
-    to_consume_book: 'Do przeczytania', to_consume_movie: 'Do obejrzenia', to_consume_music: 'Do odsłuchania'
+    book: 'Książka', movie: 'Film', music: 'Muzyka', videogame: 'Gra wideo', boardgame: 'Gra planszowa',
+    author_book: 'Autor', author_movie: 'Reżyser', author_music: 'Artysta', author_videogame: 'Producent', author_boardgame: 'Autor',
+    year_book: 'Rok wydania', year_movie: 'Rok premiery', year_music: 'Rok wydania', year_videogame: 'Rok wydania', year_boardgame: 'Rok wydania',
+    consumed_book: 'Przeczytane', consumed_movie: 'Obejrzane', consumed_music: 'Odsłuchane', consumed_videogame: 'Ukończona', consumed_boardgame: 'Zagrana',
+    to_consume_book: 'Do przeczytania', to_consume_movie: 'Do obejrzenia', to_consume_music: 'Do odsłuchania', to_consume_videogame: 'Do ukończenia', to_consume_boardgame: 'Do zagrania'
   },
   en: {
     nav_scan: 'Add', nav_list: 'Collection', nav_loans: 'Loans', nav_settings: 'Settings',
@@ -333,11 +346,11 @@ const I18N = {
     borrow_date: 'Borrow date', due_date: 'Due date', save: 'Save', lend_btn: 'Lend', cancel: 'Cancel',
     email: 'Email', password: 'Password', login_btn: 'Log in',
     appearance: 'Appearance', dark_theme: 'Dark', light_theme: 'Light',
-    book: 'Book', movie: 'Movie', music: 'Music',
-    author_book: 'Author', author_movie: 'Director', author_music: 'Artist',
-    year_book: 'Year of publication', year_movie: 'Release year', year_music: 'Year of release',
-    consumed_book: 'Read', consumed_movie: 'Watched', consumed_music: 'Listened',
-    to_consume_book: 'To read', to_consume_movie: 'To watch', to_consume_music: 'To listen'
+    book: 'Book', movie: 'Movie', music: 'Music', videogame: 'Video game', boardgame: 'Board game',
+    author_book: 'Author', author_movie: 'Director', author_music: 'Artist', author_videogame: 'Developer', author_boardgame: 'Designer',
+    year_book: 'Year of publication', year_movie: 'Release year', year_music: 'Year of release', year_videogame: 'Release year', year_boardgame: 'Release year',
+    consumed_book: 'Read', consumed_movie: 'Watched', consumed_music: 'Listened', consumed_videogame: 'Completed', consumed_boardgame: 'Played',
+    to_consume_book: 'To read', to_consume_movie: 'To watch', to_consume_music: 'To listen', to_consume_videogame: 'To complete', to_consume_boardgame: 'To play'
   },
   zh: {
     nav_scan: '添加', nav_list: '收藏', nav_loans: '借阅', nav_settings: '设置',
@@ -357,11 +370,11 @@ const I18N = {
     borrow_date: '借出日期', due_date: '归还期限', save: '保存', lend_btn: '借出', cancel: '取消',
     email: '电子邮件', password: '密码', login_btn: '登录',
     appearance: '外观', dark_theme: '深色', light_theme: '浅色',
-    book: '书籍', movie: '电影', music: '音乐',
-    author_book: '作者', author_movie: '导演', author_music: '艺术家',
-    year_book: '出版年份', year_movie: '上映年份', year_music: '发行年份',
-    consumed_book: '已读', consumed_movie: '已看', consumed_music: '已听',
-    to_consume_book: '待读', to_consume_movie: '待看', to_consume_music: '待听'
+    book: '书籍', movie: '电影', music: '音乐', videogame: '电子游戏', boardgame: '桌游',
+    author_book: '作者', author_movie: '导演', author_music: '艺术家', author_videogame: '开发商', author_boardgame: '设计师',
+    year_book: '出版年份', year_movie: '上映年份', year_music: '发行年份', year_videogame: '发行年份', year_boardgame: '发行年份',
+    consumed_book: '已读', consumed_movie: '已看', consumed_music: '已听', consumed_videogame: '已通关', consumed_boardgame: '已玩',
+    to_consume_book: '待读', to_consume_movie: '待看', to_consume_music: '待听', to_consume_videogame: '待通关', to_consume_boardgame: '待玩'
   }
 };
 
@@ -375,10 +388,15 @@ function t(key){
 // nadpisujemy zawartość tych stałych obiektów przy starcie i przy każdej zmianie języka.
 function applyLocaleLabels(){
   TYPE_LABELS.book = t('book'); TYPE_LABELS.movie = t('movie'); TYPE_LABELS.music = t('music');
+  TYPE_LABELS.videogame = t('videogame'); TYPE_LABELS.boardgame = t('boardgame');
   CREATOR_LABELS.book = t('author_book'); CREATOR_LABELS.movie = t('author_movie'); CREATOR_LABELS.music = t('author_music');
+  CREATOR_LABELS.videogame = t('author_videogame'); CREATOR_LABELS.boardgame = t('author_boardgame');
   YEAR_LABELS.book = t('year_book'); YEAR_LABELS.movie = t('year_movie'); YEAR_LABELS.music = t('year_music');
+  YEAR_LABELS.videogame = t('year_videogame'); YEAR_LABELS.boardgame = t('year_boardgame');
   CONSUMED_LABELS.book = t('consumed_book'); CONSUMED_LABELS.movie = t('consumed_movie'); CONSUMED_LABELS.music = t('consumed_music');
+  CONSUMED_LABELS.videogame = t('consumed_videogame'); CONSUMED_LABELS.boardgame = t('consumed_boardgame');
   TO_CONSUME_LABELS.book = t('to_consume_book'); TO_CONSUME_LABELS.movie = t('to_consume_movie'); TO_CONSUME_LABELS.music = t('to_consume_music');
+  TO_CONSUME_LABELS.videogame = t('to_consume_videogame'); TO_CONSUME_LABELS.boardgame = t('to_consume_boardgame');
 }
 
 function setLocale(loc){
@@ -595,6 +613,8 @@ function icon(name){
     book: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>',
     movie: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="18" rx="2"/><path d="M7 3v18M17 3v18M2 8h5M2 16h5M17 8h5M17 16h5"/></svg>',
     music: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>',
+    videogame: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="12" rx="6"/><path d="M6 11v4M4 13h4"/><circle cx="16" cy="11" r="1" fill="currentColor"/><circle cx="18.5" cy="13.5" r="1" fill="currentColor"/></svg>',
+    boardgame: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8" cy="8" r="1.2" fill="currentColor"/><circle cx="16" cy="8" r="1.2" fill="currentColor"/><circle cx="12" cy="12" r="1.2" fill="currentColor"/><circle cx="8" cy="16" r="1.2" fill="currentColor"/><circle cx="16" cy="16" r="1.2" fill="currentColor"/></svg>',
     search: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>',
     x: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>',
     check: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>',
@@ -766,10 +786,12 @@ function renderPublicGrid(queryOnly){
     all: base.length,
     book: base.filter(i=>i.type==='book').length,
     movie: base.filter(i=>i.type==='movie').length,
-    music: base.filter(i=>i.type==='music').length
+    music: base.filter(i=>i.type==='music').length,
+    videogame: base.filter(i=>i.type==='videogame').length,
+    boardgame: base.filter(i=>i.type==='boardgame').length
   };
   if (!queryOnly){
-    document.getElementById('public-type-tabs').innerHTML = ['all','book','movie','music'].map(t=>
+    document.getElementById('public-type-tabs').innerHTML = ['all','book','movie','music','videogame','boardgame'].map(t=>
       `<button class="${publicViewState.typeFilter===t?'active':''}" onclick="setPublicTypeFilter('${t}')">${t==='all'?'Wszystko':TYPE_LABELS[t]} (${counts[t]})</button>`
     ).join('');
     document.getElementById('public-sort').innerHTML = PUBLIC_SORT_OPTIONS.map(([v,label])=>
@@ -828,6 +850,8 @@ function publicStatsHtml(){
   const bookCount = owned.filter(i=>i.type==='book').length;
   const movieCount = owned.filter(i=>i.type==='movie').length;
   const musicCount = owned.filter(i=>i.type==='music').length;
+  const videogameCount = owned.filter(i=>i.type==='videogame').length;
+  const boardgameCount = owned.filter(i=>i.type==='boardgame').length;
   const rated = owned.filter(i=>i.rating);
   const avgRating = rated.length ? (rated.reduce((s,i)=>s+i.rating,0) / rated.length) : 0;
 
@@ -853,6 +877,8 @@ function publicStatsHtml(){
         <div class="stat-tile" style="cursor:default;"><div class="stat-num">${bookCount}</div><div class="stat-label">Książki</div></div>
         <div class="stat-tile" style="cursor:default;"><div class="stat-num">${movieCount}</div><div class="stat-label">Filmy</div></div>
         <div class="stat-tile" style="cursor:default;"><div class="stat-num">${musicCount}</div><div class="stat-label">Muzyka</div></div>
+        <div class="stat-tile" style="cursor:default;"><div class="stat-num">${videogameCount}</div><div class="stat-label">Gry wideo</div></div>
+        <div class="stat-tile" style="cursor:default;"><div class="stat-num">${boardgameCount}</div><div class="stat-label">Gry planszowe</div></div>
       </div>
       ${(wishlistCount || toConsumeCount) ? `
         <div class="stat-group-label">Do zrobienia</div>
@@ -1091,7 +1117,7 @@ async function goAddNew(target){
 
 // Kafelki statystyk w Ustawieniach — skaczą do przefiltrowanej listy zamiast być czystym tekstem.
 async function goToStat(kind){
-  if (kind === 'all' || kind === 'book' || kind === 'movie' || kind === 'music'){
+  if (kind === 'all' || kind === 'book' || kind === 'movie' || kind === 'music' || kind === 'videogame' || kind === 'boardgame'){
     await setTab('list');
     state.listView = 'owned';
     localStorage.setItem('bib_list_view', 'owned');
@@ -1762,6 +1788,68 @@ function detectMusicFormat(text){
   if (/\b(cassette|kaseta|tape|mc)\b/i.test(text)) return 'kaseta';
   return '';
 }
+// Dopasowanie platformy gry wideo z tekstu ogłoszenia/tytułu (UPCitemdb) — kolejność ma
+// znaczenie: bardziej szczegółowe wzorce (np. "Xbox Series X") muszą trafić przed
+// ogólniejszymi (np. samo "Xbox"), inaczej ogólniejszy wzorzec dopasuje się pierwszy.
+const VIDEOGAME_FORMAT_PATTERNS = [
+  [/\bnintendo\s?switch\s?2\b/i, 'Nintendo Switch 2'],
+  [/\bswitch\b/i, 'Nintendo Switch'],
+  [/\bwii\s?u\b/i, 'Wii U'],
+  [/\bwii\b/i, 'Wii'],
+  [/\bgamecube|ngc\b/i, 'GameCube'],
+  [/\bn(intendo)?\s?64|n64\b/i, 'Nintendo 64'],
+  [/\bsnes|super nintendo\b/i, 'SNES'],
+  [/\bnes\b/i, 'NES'],
+  [/\bnintendo 3ds|3ds\b/i, 'Nintendo 3DS'],
+  [/\bnintendo ds|nds\b/i, 'Nintendo DS'],
+  [/\bgame ?boy advance|gba\b/i, 'Game Boy Advance'],
+  [/\bgame ?boy color|gbc\b/i, 'Game Boy Color'],
+  [/\bgame ?boy|gb\b/i, 'Game Boy'],
+  [/\bplaystation\s?5|ps5\b/i, 'PlayStation 5'],
+  [/\bplaystation\s?4|ps4\b/i, 'PlayStation 4'],
+  [/\bplaystation\s?3|ps3\b/i, 'PlayStation 3'],
+  [/\bplaystation\s?2|ps2\b/i, 'PlayStation 2'],
+  [/\bplaystation\s?vita|ps vita\b/i, 'PlayStation Vita'],
+  [/\bplaystation portable|\bpsp\b/i, 'PlayStation Portable (PSP)'],
+  [/\bplaystation\b|\bps1\b|\bpsx\b/i, 'PlayStation'],
+  [/\bxbox series\b/i, 'Xbox Series X/S'],
+  [/\bxbox one\b/i, 'Xbox One'],
+  [/\bxbox 360\b/i, 'Xbox 360'],
+  [/\bxbox\b/i, 'Xbox'],
+  [/\bsega genesis mini|genesis mini\b/i, 'Sega Genesis Mini'],
+  [/\bsega mega ?drive|sega genesis\b/i, 'Sega Mega Drive / Genesis'],
+  [/\bsega saturn\b/i, 'Sega Saturn'],
+  [/\bdreamcast\b/i, 'Sega Dreamcast'],
+  [/\bsega master system\b/i, 'Sega Master System'],
+  [/\bgame gear\b/i, 'Sega Game Gear'],
+  [/\bneo ?geo pocket\b/i, 'Neo Geo Pocket'],
+  [/\bneo ?geo\b/i, 'Neo Geo AES'],
+  [/\batari lynx\b/i, 'Atari Lynx'],
+  [/\batari 2600\b/i, 'Atari 2600'],
+  [/\batari 5200\b/i, 'Atari 5200'],
+  [/\batari 7800\b/i, 'Atari 7800'],
+  [/\batari st\b/i, 'Atari ST'],
+  [/\bcolecovision\b/i, 'ColecoVision'],
+  [/\bintellivision\b/i, 'Intellivision'],
+  [/\b3do\b/i, '3DO'],
+  [/\bsteam ?deck\b/i, 'Steam Deck'],
+  [/\bnes classic\b/i, 'NES Classic Mini'],
+  [/\bsnes classic\b/i, 'SNES Classic Mini'],
+  [/\bplaystation classic\b/i, 'PlayStation Classic'],
+  [/\bcommodore ?64|\bc64\b/i, 'Commodore 64'],
+  [/\bamiga\b/i, 'Amiga'],
+  [/\bzx spectrum\b/i, 'ZX Spectrum'],
+  [/\bmsx\b/i, 'MSX'],
+  [/\bmac(\s?os)?\b/i, 'Mac'],
+  [/\bpc\b|\bwindows\b/i, 'PC (Windows)'],
+  [/\bdos\b/i, 'DOS']
+];
+function detectVideogameFormat(text){
+  for (const [re, label] of VIDEOGAME_FORMAT_PATTERNS){
+    if (re.test(text)) return label;
+  }
+  return '';
+}
 
 // UPCitemdb (darmowa baza) często zwraca tytuł żywcem z ogłoszenia na aukcji
 // (eBay itp.) — usuwamy typowe śmieci sprzedażowe, kody i etykiety formatu,
@@ -1894,9 +1982,19 @@ async function lookupBarcodeGeneral(code){
     if (item){
       const cat = (item.category || '').toLowerCase();
       const title = (item.title || '').toLowerCase();
-      const isMusic = /music|vinyl|album|compact disc|soundtrack|\bcds?\b/.test(cat) || /vinyl|soundtrack|\balbum\b|\blp\b|\bcd\b/.test(title);
-      const type = isMusic ? 'music' : 'movie';
-      const format = type === 'movie' ? detectMovieFormat(item.title||'') : detectMusicFormat(item.title||'');
+      // Kolejność ma znaczenie: sprawdzamy najpierw najbardziej charakterystyczne kategorie
+      // (gra wideo/planszowa po nazwie platformy/kategorii), dopiero potem muzykę — inaczej
+      // np. "PS4 soundtrack" trafiłby błędnie do Muzyki.
+      const isVideogame = /video game|\bconsole\b/.test(cat) ||
+        /\b(ps[1-5]|playstation|xbox|nintendo|switch|wii|gamecube|game ?boy|3ds|nds|psp|ps vita|steam deck)\b/.test(title);
+      const isBoardgame = !isVideogame && (/board game|card game|tabletop/.test(cat) || /board game|card game|gra planszowa/.test(title));
+      const isMusic = !isVideogame && !isBoardgame &&
+        (/music|vinyl|album|compact disc|soundtrack|\bcds?\b/.test(cat) || /vinyl|soundtrack|\balbum\b|\blp\b|\bcd\b/.test(title));
+      const type = isVideogame ? 'videogame' : isBoardgame ? 'boardgame' : isMusic ? 'music' : 'movie';
+      const format = type === 'movie' ? detectMovieFormat(item.title||'')
+        : type === 'music' ? detectMusicFormat(item.title||'')
+        : type === 'videogame' ? detectVideogameFormat(item.title||'')
+        : '';
       const cleanTitle = cleanListingTitle(item.title||'');
       let guess = {
         type,
@@ -2008,6 +2106,17 @@ function findDuplicateItem(l){
   ) || null;
 }
 
+// Platforma gry wideo pogrupowana w <optgroup> (Konsole / Komputery / Mini konsole
+// przenośne) — patrz VIDEOGAME_FORMAT_GROUPS. TYPE_FORMATS.videogame (używane np. do
+// filtrowania w Szukaj) to po prostu spłaszczona wersja tych samych grup.
+function renderVideogameFormatOptions(l){
+  return Object.entries(VIDEOGAME_FORMAT_GROUPS).map(([group, formats]) => `
+    <optgroup label="${escapeHtml(group)}">
+      ${formats.map(f=>`<option value="${escapeHtml(f)}" ${l.format===f?'selected':''}>${escapeHtml(f)}</option>`).join('')}
+    </optgroup>
+  `).join('');
+}
+
 function renderAddForm(main){
   const l = state.lookup;
   const dup = findDuplicateItem(l);
@@ -2063,6 +2172,8 @@ function renderAddForm(main){
         <option value="book" ${l.type==='book'?'selected':''}>Książka</option>
         <option value="movie" ${l.type==='movie'?'selected':''}>Film</option>
         <option value="music" ${l.type==='music'?'selected':''}>Muzyka</option>
+        <option value="videogame" ${l.type==='videogame'?'selected':''}>Gra wideo</option>
+        <option value="boardgame" ${l.type==='boardgame'?'selected':''}>Gra planszowa</option>
       </select>
       ${l.type === 'book' ? renderBookSearchBox(l) : ''}
       ${l.type === 'movie' ? renderOmdbSearchBox(l) : ''}
@@ -2076,9 +2187,10 @@ function renderAddForm(main){
         <label>Wydawnictwo</label>
         <input id="f-publisher" value="${escapeHtml(l.publisher||'')}" placeholder="np. Znak, W.A.B., PWN" oninput="syncDraftField('publisher', this.value)">
       ` : ''}
-      <label>Format</label>
+      <label>${l.type === 'videogame' ? 'Platforma' : 'Format'}</label>
       <select id="f-format" onchange="syncDraftField('format', this.value)">
-        ${TYPE_FORMATS[l.type].map(f=>`<option value="${escapeHtml(f)}" ${l.format===f?'selected':''}>${escapeHtml(f)}</option>`).join('')}
+        ${l.type === 'videogame' ? renderVideogameFormatOptions(l) :
+          TYPE_FORMATS[l.type].map(f=>`<option value="${escapeHtml(f)}" ${l.format===f?'selected':''}>${escapeHtml(f)}</option>`).join('')}
       </select>
       <label id="f-year-label">${YEAR_LABELS[l.type]}</label>
       <input id="f-year" value="${escapeHtml(l.year)}" placeholder="np. 2020" inputmode="numeric" oninput="syncDraftField('year', this.value)">
@@ -2601,7 +2713,9 @@ function renderList(main){
     all: byStatus.length,
     book: byStatus.filter(i=>i.type==='book').length,
     movie: byStatus.filter(i=>i.type==='movie').length,
-    music: byStatus.filter(i=>i.type==='music').length
+    music: byStatus.filter(i=>i.type==='music').length,
+    videogame: byStatus.filter(i=>i.type==='videogame').length,
+    boardgame: byStatus.filter(i=>i.type==='boardgame').length
   };
   const wishlistCount = state.items.filter(i=>i.status==='wishlist').length;
   const queueCount = state.items.filter(i=>i.queue_position != null).length;
@@ -2619,11 +2733,15 @@ function renderList(main){
           <button class="btn small secondary" style="flex:0 0 auto;" onclick="toggleSelectMode()">${state.selectMode ? t('done') : t('select')}</button>
         </div>
         <div class="filter-tiles filter-tiles-combined">
-          <button class="btn filter-tile tile-search ${state.searchMode?'mint':'secondary'}" onclick="toggleSearch()" title="Szukaj w kolekcji">${icon('search')}<span>${t('search')}</span></button>
-          <button class="btn filter-tile tile-coll ${state.listView==='owned'?'mint':'secondary'}" onclick="setListView('owned')">${icon('book')}<span>${t('collection')}</span></button>
-          <button class="btn filter-tile tile-wish ${state.listView==='wishlist'?'mint':'secondary'}" onclick="setListView('wishlist')">${icon('list')}<span>${t('wishlist')}${wishlistCount?` (${wishlistCount})`:''}</span></button>
-          <button class="btn filter-tile tile-queue ${state.listView==='queue'?'mint':'secondary'}" onclick="setListView('queue')">${icon('grid')}<span>${t('queue')}${queueCount?` (${queueCount})`:''}</span></button>
-          ${['all','movie','book','music'].map(tf=>`<button class="btn filter-tile tile-${tf} ${state.typeFilter===tf?'':'secondary'}" onclick="setTypeFilter('${tf}')">${icon(tf==='all'?'grid':tf)}<span>${tf==='all'?t('all'):TYPE_LABELS[tf]} (${counts[tf]})</span></button>`).join('')}
+          <div class="filter-col filter-col-actions">
+            <button class="btn filter-tile tile-search ${state.searchMode?'mint':'secondary'}" onclick="toggleSearch()" title="Szukaj w kolekcji">${icon('search')}<span>${t('search')}</span></button>
+            <button class="btn filter-tile tile-coll ${state.listView==='owned'?'mint':'secondary'}" onclick="setListView('owned')">${icon('book')}<span>${t('collection')}</span></button>
+            <button class="btn filter-tile tile-wish ${state.listView==='wishlist'?'mint':'secondary'}" onclick="setListView('wishlist')">${icon('list')}<span>${t('wishlist')}${wishlistCount?` (${wishlistCount})`:''}</span></button>
+            <button class="btn filter-tile tile-queue ${state.listView==='queue'?'mint':'secondary'}" onclick="setListView('queue')">${icon('grid')}<span>${t('queue')}${queueCount?` (${queueCount})`:''}</span></button>
+          </div>
+          <div class="filter-col filter-col-types">
+            ${['all','movie','book','music','videogame','boardgame'].map(tf=>`<button class="btn filter-tile tile-${tf} ${state.typeFilter===tf?'':'secondary'}" onclick="setTypeFilter('${tf}')">${icon(tf==='all'?'grid':tf)}<span>${tf==='all'?t('all'):TYPE_LABELS[tf]} (${counts[tf]})</span></button>`).join('')}
+          </div>
         </div>
         ${state.selectMode ? `
           <div class="card" style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px;padding:12px;flex-wrap:wrap;">
@@ -3121,15 +3239,11 @@ function renderSearch(main){
       <input id="search-year" value="${escapeHtml(state.searchYear||'')}" placeholder="Rok" inputmode="numeric" oninput="onSearchYearInput()" style="margin-bottom:0;">
       <select id="search-format" onchange="onSearchFormatChange()" style="margin-bottom:0;">
         <option value="">Format: wszystkie</option>
-        <optgroup label="${TYPE_LABELS.book}">
-          ${TYPE_FORMATS.book.map(f=>`<option value="${escapeHtml(f)}" ${state.searchFormat===f?'selected':''}>${escapeHtml(f)}</option>`).join('')}
-        </optgroup>
-        <optgroup label="${TYPE_LABELS.movie}">
-          ${TYPE_FORMATS.movie.map(f=>`<option value="${escapeHtml(f)}" ${state.searchFormat===f?'selected':''}>${escapeHtml(f)}</option>`).join('')}
-        </optgroup>
-        <optgroup label="${TYPE_LABELS.music}">
-          ${TYPE_FORMATS.music.map(f=>`<option value="${escapeHtml(f)}" ${state.searchFormat===f?'selected':''}>${escapeHtml(f)}</option>`).join('')}
-        </optgroup>
+        ${Object.keys(TYPE_FORMATS).map(type => `
+          <optgroup label="${TYPE_LABELS[type]}">
+            ${TYPE_FORMATS[type].map(f=>`<option value="${escapeHtml(f)}" ${state.searchFormat===f?'selected':''}>${escapeHtml(f)}</option>`).join('')}
+          </optgroup>
+        `).join('')}
       </select>
     </div>
     ${hasFilter ? sortSelect() : ''}
@@ -3510,7 +3624,9 @@ function renderLoans(main){
     all: state.loans.length,
     book: state.loans.filter(l=>loanTypeOf(l)==='book').length,
     movie: state.loans.filter(l=>loanTypeOf(l)==='movie').length,
-    music: state.loans.filter(l=>loanTypeOf(l)==='music').length
+    music: state.loans.filter(l=>loanTypeOf(l)==='music').length,
+    videogame: state.loans.filter(l=>loanTypeOf(l)==='videogame').length,
+    boardgame: state.loans.filter(l=>loanTypeOf(l)==='boardgame').length
   };
 
   const toolbar = `
@@ -3528,7 +3644,7 @@ function renderLoans(main){
       </div>
     ` : ''}
     <div class="tabs">
-      ${['all','book','movie','music'].map(t=>`<button class="${state.loanTypeFilter===t?'active':''}" onclick="setLoanTypeFilter('${t}')">${t==='all'?'Wszystko':TYPE_LABELS[t]} (${loanCounts[t]})</button>`).join('')}
+      ${['all','book','movie','music','videogame','boardgame'].map(t=>`<button class="${state.loanTypeFilter===t?'active':''}" onclick="setLoanTypeFilter('${t}')">${t==='all'?'Wszystko':TYPE_LABELS[t]} (${loanCounts[t]})</button>`).join('')}
     </div>
     ${sortSelect()}
     ${state.loanQuickFilter !== 'all' ? `
@@ -3765,6 +3881,8 @@ function renderSettings(main){
   const bookCount = owned.filter(i=>i.type==='book').length;
   const movieCount = owned.filter(i=>i.type==='movie').length;
   const musicCount = owned.filter(i=>i.type==='music').length;
+  const videogameCount = owned.filter(i=>i.type==='videogame').length;
+  const boardgameCount = owned.filter(i=>i.type==='boardgame').length;
   const lentOutCount = state.loans.filter(l=>l.direction!=='in').length;
   const borrowedInCount = state.loans.filter(l=>l.direction==='in').length;
   const overdueCount = state.loans.filter(isOverdue).length;
@@ -3821,6 +3939,8 @@ function renderSettings(main){
         <div class="stat-tile" onclick="goToStat('book')"><div class="stat-num">${bookCount}</div><div class="stat-label">Książki</div></div>
         <div class="stat-tile" onclick="goToStat('movie')"><div class="stat-num">${movieCount}</div><div class="stat-label">Filmy</div></div>
         <div class="stat-tile" onclick="goToStat('music')"><div class="stat-num">${musicCount}</div><div class="stat-label">Muzyka</div></div>
+        <div class="stat-tile" onclick="goToStat('videogame')"><div class="stat-num">${videogameCount}</div><div class="stat-label">Gry wideo</div></div>
+        <div class="stat-tile" onclick="goToStat('boardgame')"><div class="stat-num">${boardgameCount}</div><div class="stat-label">Gry planszowe</div></div>
       </div>
       ${(wishlistCount || toConsumeCount) ? `
         <div class="stat-group-label">Do zrobienia</div>
