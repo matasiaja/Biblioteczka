@@ -2194,6 +2194,13 @@ function renderAddForm(main){
       </select>
       <label id="f-year-label">${YEAR_LABELS[l.type]}</label>
       <input id="f-year" value="${escapeHtml(l.year)}" placeholder="np. 2020" inputmode="numeric" oninput="syncDraftField('year', this.value)">
+      <label>Cena zakupu</label>
+      <div class="row">
+        <input id="f-purchase-price" value="${escapeHtml(l.purchase_price != null ? l.purchase_price : '')}" placeholder="opcjonalnie" inputmode="decimal" oninput="syncDraftField('purchase_price', this.value)">
+        <select id="f-purchase-currency" style="flex:0 0 90px;" onchange="syncDraftField('purchase_currency', this.value)">
+          ${['PLN','EUR','USD','GBP'].map(c=>`<option value="${c}" ${(l.purchase_currency||'PLN')===c?'selected':''}>${c}</option>`).join('')}
+        </select>
+      </div>
       <label>Ocena</label>
       <div style="margin-bottom:14px;">
         ${[1,2,3,4,5].map(n=>`<button type="button" onclick="setRating(${n})" style="background:none;border:none;cursor:pointer;font-size:26px;line-height:1;padding:2px 3px;color:${(l.rating||0)>=n?'var(--warn)':'var(--border)'};">★</button>`).join('')}
@@ -2604,6 +2611,8 @@ async function saveItem(allowDuplicate){
     creator: document.getElementById('f-creator').value.trim() || null,
     format: document.getElementById('f-format').value.trim() || null,
     year: parseInt(document.getElementById('f-year').value) || null,
+    purchase_price: parseFloat(document.getElementById('f-purchase-price').value) || null,
+    purchase_currency: document.getElementById('f-purchase-currency').value || 'PLN',
     cover_url: l.cover_url || null,
     notes: (notesEl ? notesEl.value.trim() : '') || null,
     personal_notes: (personalNotesEl ? personalNotesEl.value.trim() : '') || null,
@@ -3078,9 +3087,10 @@ const SORT_OPTIONS = [
   ['format', 'Format'],
   ['year', 'Rok'],
   ['created_at', 'Data dodania'],
-  ['rating', 'Ocena']
+  ['rating', 'Ocena'],
+  ['purchase_price', 'Cena zakupu']
 ];
-const SORT_NUMERIC_KEYS = ['year', 'created_at', 'rating'];
+const SORT_NUMERIC_KEYS = ['year', 'created_at', 'rating', 'purchase_price'];
 
 function sortSelect(){
   const numeric = SORT_NUMERIC_KEYS.includes(state.sortBy);
@@ -3116,6 +3126,7 @@ function sortByField(list, getItem){
     const ib = getItem ? (getItem(b) || {}) : b;
     if (key === 'year') return dir * ((ia.year || 0) - (ib.year || 0));
     if (key === 'created_at') return dir * (new Date(ia.created_at || 0) - new Date(ib.created_at || 0));
+    if (key === 'purchase_price') return dir * ((ia.purchase_price || 0) - (ib.purchase_price || 0));
     return dir * collator.compare((ia[key] || '').toString(), (ib[key] || '').toString());
   });
 }
@@ -3320,6 +3331,62 @@ async function bulkSetWatched(watched){
   renderTab();
 }
 
+// Wycena rynkowa — pokazuje cenę zakupu (wpisaną ręcznie) obok wyniku ostatniego
+// sprawdzenia CEX/eBay (item.market_prices, patrz cf-worker/worker.js). Źródła zostają
+// w swoich oryginalnych walutach zamiast sztucznego przeliczania na jedną (brak API
+// kursów walut w projekcie) — stąd osobny wiersz na każde źródło.
+function marketPriceRowHtml(p){
+  if (!p || !p.found) return '';
+  if (p.source === 'CEX'){
+    return `<div class="record-row"><dt>CEX</dt><dd>sprzedaż ${p.sellPrice ?? '—'} ${p.currency} · skup ${p.cashPrice ?? '—'} ${p.currency}</dd></div>`;
+  }
+  if (p.source === 'eBay'){
+    return `<div class="record-row"><dt>eBay</dt><dd>${p.low}–${p.high} ${p.currency} (mediana ${p.median}, ${p.count} ofert)</dd></div>`;
+  }
+  return '';
+}
+function marketPriceHtml(item){
+  const prices = item.market_prices || [];
+  const rows = prices.map(marketPriceRowHtml).join('');
+  return `
+    <div class="section-title" style="margin-top:4px;">Wycena</div>
+    <dl class="record-fields">
+      ${item.purchase_price != null ? `<div class="record-row"><dt>Cena zakupu</dt><dd>${item.purchase_price} ${item.purchase_currency||'PLN'}</dd></div>` : ''}
+      ${rows || `<div class="record-row"><dt>Rynek</dt><dd class="meta">Jeszcze nie sprawdzano</dd></div>`}
+    </dl>
+    <div class="meta" style="margin-bottom:10px;">${item.market_price_updated_at ? 'Ostatnia aktualizacja: ' + new Date(item.market_price_updated_at).toLocaleDateString('pl-PL') : 'Ceny CEX/eBay same się doszukają co jakiś czas w tle — możesz też sprawdzić od razu.'}</div>
+    <button class="btn secondary" style="margin-bottom:10px;" onclick="checkMarketPriceNow('${item.id}')" id="market-price-btn-${item.id}">Sprawdź cenę teraz</button>
+  `;
+}
+
+async function checkMarketPriceNow(itemId){
+  const item = state.items.find(i=>i.id===itemId);
+  if (!item) return;
+  const btn = document.getElementById(`market-price-btn-${itemId}`);
+  if (btn){ btn.disabled = true; btn.textContent = 'Sprawdzam…'; }
+  try {
+    const params = new URLSearchParams();
+    if (item.barcode) params.set('barcode', item.barcode);
+    const q = [item.title, item.creator].filter(Boolean).join(' ').trim();
+    if (q) params.set('q', q);
+    if (!params.toString()){ toast('Brak kodu kreskowego i tytułu — nie ma czego szukać'); return; }
+    const res = await fetch(`${FUNCTIONS_BASE}/market-price?${params.toString()}`);
+    const data = await res.json();
+    const market_prices = data.results || [];
+    const now = new Date().toISOString();
+    const { error } = await sb.from('items').update({ market_prices, market_price_updated_at: now }).eq('id', itemId);
+    if (error){ toast('Błąd zapisu wyceny: ' + error.message); return; }
+    if (market_prices.length){
+      await sb.from('price_history').insert({ item_id: itemId, market_prices, checked_at: now });
+    }
+    await loadAll();
+    toast(market_prices.length ? 'Zaktualizowano wycenę' : 'Nie znaleziono wyceny dla tej pozycji w CEX/eBay');
+    if (state.openItemId === itemId) openItem(itemId);
+  } catch(e){
+    toast('Błąd sprawdzania ceny: ' + e.message);
+  }
+}
+
 function openItem(id){
   const item = state.items.find(i=>i.id===id);
   if (!item) return;
@@ -3355,6 +3422,7 @@ function openItem(id){
         ${item.barcode ? `<div class="record-row"><dt>${t('barcode_label')}</dt><dd class="mono">${escapeHtml(item.barcode)}</dd></div>` : ''}
         ${item.index_number ? `<div class="record-row"><dt>${t('index_label')}</dt><dd class="mono">${escapeHtml(item.index_number)}</dd></div>` : ''}
       </dl>
+      ${marketPriceHtml(item)}
       ${item.rating ? `<div style="color:var(--warn);font-size:18px;margin-bottom:10px;">${starsHtml(item.rating)}</div>` : ''}
       ${item.notes ? clampedTextHtml(item.notes, 'margin-bottom:14px;') : ''}
       ${item.personal_notes ? `
@@ -3578,6 +3646,8 @@ function editItem(id){
     creator: item.creator || '',
     format: item.format || '',
     year: item.year || '',
+    purchase_price: item.purchase_price != null ? item.purchase_price : '',
+    purchase_currency: item.purchase_currency || 'PLN',
     cover_url: item.cover_url || '',
     index_number: item.index_number || '',
     publisher: item.publisher || '',

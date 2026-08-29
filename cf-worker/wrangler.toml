@@ -1,3 +1,14 @@
 name = "biblioteczka-functions"
 main = "worker.js"
 compatibility_date = "2026-01-01"
+
+# Ten sam URL, co SUPABASE_URL w index.html — nie jest tajny (to publiczny adres
+# projektu Supabase), więc zwykła zmienna wystarczy; tajny jest dopiero
+# SUPABASE_SERVICE_ROLE_KEY (patrz README.md, ustawiany przez `wrangler secret put`).
+[vars]
+SUPABASE_URL = "https://alxwzewdsqhaszzcpkga.supabase.co"
+
+# Cykliczne odświeżanie wycen rynkowych (patrz refreshMarketPrices() w worker.js) —
+# codziennie o 3:00 UTC, paczkami po PRICE_REFRESH_BATCH_SIZE pozycji.
+[triggers]
+crons = ["0 3 * * *"]

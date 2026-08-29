@@ -275,3 +275,31 @@ create policy "auth_full_access" on barcode_lookup_cache for all
 alter table items drop constraint if exists items_type_check;
 alter table items add constraint items_type_check
   check (type in ('book','movie','music','videogame','boardgame'));
+
+-- ============================================
+-- MIGRACJA: wyceny rynkowe (uruchom ręcznie w SQL Editorze, jeśli baza już istnieje)
+-- purchase_price/purchase_currency — cena zakupu wpisywana ręcznie przez właściciela.
+-- market_prices — surowy wynik ostatniego sprawdzenia CEX/eBay (tablica JSON, po jednym
+-- obiekcie na źródło — patrz cf-worker/worker.js: cexLookup()/ebayLookup()), różne źródła
+-- celowo zostają w swoich oryginalnych walutach zamiast przeliczania na jedną (brak API
+-- kursów walut w projekcie) — UI pokazuje je osobno.
+-- price_history — log każdego sprawdzenia w czasie (ręcznego i z cyklicznego odświeżania
+-- w Workerze), do przyszłych wykresów trendu wartości.
+-- ============================================
+alter table items add column if not exists purchase_price numeric;
+alter table items add column if not exists purchase_currency text default 'PLN';
+alter table items add column if not exists market_prices jsonb;
+alter table items add column if not exists market_price_updated_at timestamptz;
+
+create table if not exists price_history (
+  id uuid primary key default gen_random_uuid(),
+  item_id uuid not null references items(id) on delete cascade,
+  market_prices jsonb not null,
+  checked_at timestamptz not null default now()
+);
+create index if not exists price_history_item_idx on price_history(item_id);
+
+alter table price_history enable row level security;
+drop policy if exists "auth_full_access" on price_history;
+create policy "auth_full_access" on price_history for all
+  to authenticated using (true) with check (true);
