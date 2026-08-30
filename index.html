@@ -482,6 +482,10 @@ let state = {
   searchQuery: '',
   searchYear: '',
   searchFormat: '',
+  listYearFilter: localStorage.getItem('bib_list_year_filter') || '',
+  listFormatFilter: localStorage.getItem('bib_list_format_filter') || '',
+  listMinPriceFilter: localStorage.getItem('bib_list_min_price_filter') || '',
+  listGiftOnly: localStorage.getItem('bib_list_gift_only') === '1',
   dismissedLoanAlert: false,
   loanAlertBannerEnabled: localStorage.getItem('bib_loan_alert_banner') === '1',
   showLoanHistory: false,
@@ -2184,6 +2188,16 @@ function renderVideogameFormatOptions(l){
   `).join('');
 }
 
+// Wspólne <optgroup> "Format: wszystkie rodzaje" — używane zarówno w filtrze Szukaj, jak
+// i w filtrach na liście Kolekcji (patrz renderList()), żeby nie dublować tej samej pętli.
+function formatFilterOptgroupsHtml(selected){
+  return Object.keys(TYPE_FORMATS).map(type => `
+    <optgroup label="${TYPE_LABELS[type]}">
+      ${TYPE_FORMATS[type].map(f=>`<option value="${escapeHtml(f)}" ${selected===f?'selected':''}>${escapeHtml(f)}</option>`).join('')}
+    </optgroup>
+  `).join('');
+}
+
 function renderAddForm(main){
   const l = state.lookup;
   const dup = findDuplicateItem(l);
@@ -2278,6 +2292,10 @@ function renderAddForm(main){
         <option value="">— nie podano —</option>
         ${PURCHASE_COUNTRIES.map(c=>`<option value="${escapeHtml(c)}" ${l.purchase_country===c?'selected':''}>${escapeHtml(c)}</option>`).join('')}
       </select>
+      <label style="display:flex;align-items:center;gap:8px;margin-bottom:14px;cursor:pointer;">
+        <input type="checkbox" id="f-is-gift" style="width:18px;height:18px;margin:0;" ${l.is_gift?'checked':''} onchange="syncDraftField('is_gift', this.checked)">
+        <span>🎁 To był prezent <span class="meta" style="font-weight:400;">(nie wyklucza sprawdzania wyceny rynkowej)</span></span>
+      </label>
       <label>Ocena</label>
       <div style="margin-bottom:14px;">
         ${[1,2,3,4,5].map(n=>`<button type="button" onclick="setRating(${n})" style="background:none;border:none;cursor:pointer;font-size:26px;line-height:1;padding:2px 3px;color:${(l.rating||0)>=n?'var(--warn)':'var(--border)'};">★</button>`).join('')}
@@ -2697,6 +2715,7 @@ async function saveItem(allowDuplicate){
     purchase_price: purchasePrice,
     purchase_currency: purchasePrice != null ? (document.getElementById('f-purchase-currency').value || 'GBP') : null,
     purchase_country: document.getElementById('f-purchase-country').value || null,
+    is_gift: document.getElementById('f-is-gift').checked,
     cover_url: l.cover_url || null,
     notes: (notesEl ? notesEl.value.trim() : '') || null,
     personal_notes: (personalNotesEl ? personalNotesEl.value.trim() : '') || null,
@@ -2794,6 +2813,35 @@ function setMissingFilter(v){
   renderTab();
 }
 
+// Dodatkowe filtry listy Kolekcji (rok/format/cena zakupu od…/tylko prezenty) — ten sam
+// wzorzec co filtry w Szukaj (patrz onSearchYearInput()): po każdej zmianie renderTab()
+// przerysowuje listę, więc dla pól tekstowych trzeba ręcznie przywrócić fokus i pozycję
+// kursora, inaczej pisanie "urywa się" po każdym znaku.
+function onListYearFilterInput(){
+  state.listYearFilter = document.getElementById('list-year-filter').value.trim();
+  localStorage.setItem('bib_list_year_filter', state.listYearFilter);
+  renderTab();
+  const el = document.getElementById('list-year-filter');
+  if (el){ el.focus(); el.setSelectionRange(el.value.length, el.value.length); }
+}
+function onListFormatFilterChange(){
+  state.listFormatFilter = document.getElementById('list-format-filter').value;
+  localStorage.setItem('bib_list_format_filter', state.listFormatFilter);
+  renderTab();
+}
+function onListMinPriceFilterInput(){
+  state.listMinPriceFilter = document.getElementById('list-min-price-filter').value.trim();
+  localStorage.setItem('bib_list_min_price_filter', state.listMinPriceFilter);
+  renderTab();
+  const el = document.getElementById('list-min-price-filter');
+  if (el){ el.focus(); el.setSelectionRange(el.value.length, el.value.length); }
+}
+function toggleListGiftOnly(checked){
+  state.listGiftOnly = checked;
+  localStorage.setItem('bib_list_gift_only', checked ? '1' : '0');
+  renderTab();
+}
+
 function renderList(main){
   if (state.listView === 'queue'){ renderQueueList(main); return; }
   const byStatus = state.items.filter(i => (i.status||'owned') === state.listView);
@@ -2810,6 +2858,13 @@ function renderList(main){
       !(BOOK_ONLY_MISSING_FIELDS.includes(state.missingFilter) && i.type !== 'book') && isMissingField(i, state.missingFilter)
     );
   }
+  if (state.listFormatFilter) filtered = filtered.filter(i => i.format === state.listFormatFilter);
+  if (state.listYearFilter) filtered = filtered.filter(i => String(i.year||'') === state.listYearFilter);
+  if (state.listMinPriceFilter !== ''){
+    const minPrice = parseFloat(state.listMinPriceFilter);
+    if (!isNaN(minPrice)) filtered = filtered.filter(i => i.purchase_price != null && i.purchase_price >= minPrice);
+  }
+  if (state.listGiftOnly) filtered = filtered.filter(i => i.is_gift);
   state.visibleIds = filtered.map(i=>i.id);
   const counts = {
     all: byStatus.length,
@@ -2876,6 +2931,20 @@ function renderList(main){
         ` : ''}
         ${(state.missingFilter==='to_consume' && state.toConsumeManualSort) ? '' : sortSelect()}
         ${missingSelect()}
+        <div class="row" style="margin-bottom:10px;">
+          <input id="list-year-filter" value="${escapeHtml(state.listYearFilter)}" placeholder="Rok" inputmode="numeric" oninput="onListYearFilterInput()" style="margin-bottom:0;">
+          <select id="list-format-filter" onchange="onListFormatFilterChange()" style="margin-bottom:0;">
+            <option value="">Format: wszystkie</option>
+            ${formatFilterOptgroupsHtml(state.listFormatFilter)}
+          </select>
+        </div>
+        <div class="row" style="margin-bottom:10px;">
+          <input id="list-min-price-filter" value="${escapeHtml(state.listMinPriceFilter)}" placeholder="Cena zakupu od…" inputmode="decimal" oninput="onListMinPriceFilterInput()" style="margin-bottom:0;">
+        </div>
+        <label style="display:flex;align-items:center;gap:8px;margin-bottom:14px;cursor:pointer;">
+          <input type="checkbox" style="width:18px;height:18px;margin:0;" ${state.listGiftOnly?'checked':''} onchange="toggleListGiftOnly(this.checked)">
+          <span>🎁 Tylko prezenty</span>
+        </label>
         ${state.missingFilter==='to_consume' ? `
           <button class="btn ${state.toConsumeManualSort ? '' : 'secondary'}" style="margin-bottom:10px;" onclick="toggleToConsumeManualSort()" title="Przeciągnij wiersze na liście, żeby ustawić własną kolejność">${state.toConsumeManualSort ? '✓ ' : ''}${t('manual_order')}</button>
         ` : ''}
@@ -3362,11 +3431,7 @@ function renderSearch(main){
       <input id="search-year" value="${escapeHtml(state.searchYear||'')}" placeholder="Rok" inputmode="numeric" oninput="onSearchYearInput()" style="margin-bottom:0;">
       <select id="search-format" onchange="onSearchFormatChange()" style="margin-bottom:0;">
         <option value="">Format: wszystkie</option>
-        ${Object.keys(TYPE_FORMATS).map(type => `
-          <optgroup label="${TYPE_LABELS[type]}">
-            ${TYPE_FORMATS[type].map(f=>`<option value="${escapeHtml(f)}" ${state.searchFormat===f?'selected':''}>${escapeHtml(f)}</option>`).join('')}
-          </optgroup>
-        `).join('')}
+        ${formatFilterOptgroupsHtml(state.searchFormat)}
       </select>
     </div>
     ${hasFilter ? sortSelect() : ''}
@@ -3507,6 +3572,7 @@ function marketPriceHtml(item){
     <dl class="record-fields">
       ${item.purchase_price != null ? `<div class="record-row"><dt>Cena zakupu</dt><dd>${item.purchase_price} ${item.purchase_currency||'GBP'}</dd></div>` : ''}
       ${item.purchase_country ? `<div class="record-row"><dt>Kraj zakupu</dt><dd>${escapeHtml(item.purchase_country)}</dd></div>` : ''}
+      ${item.is_gift ? `<div class="record-row"><dt>Prezent</dt><dd>🎁 Tak</dd></div>` : ''}
       ${rows || `<div class="record-row"><dt>Cena po aktualizacji</dt><dd class="meta">${updated ? 'Nie znaleziono w CEX/eBay' : 'Jeszcze nie sprawdzano'}</dd></div>`}
     </dl>
     <div class="meta" style="margin-bottom:10px;">${updated ? 'Ostatnia aktualizacja: ' + updated : 'Ceny CEX/eBay same się doszukają co jakiś czas w tle — możesz też sprawdzić od razu.'}</div>
@@ -3608,7 +3674,7 @@ function openItem(id){
       <div class="meta mono item-detail-meta-compact" style="color:var(--text-dim);margin-bottom:14px;">${item.creator ? `<span class="attr-link" data-field="creator" data-value="${escapeHtml(item.creator)}" onclick="filterByAttrEl(this)">${escapeHtml(item.creator)}</span>` : '—'}${item.format?` · <span class="attr-link" data-field="format" data-value="${escapeHtml(item.format)}" onclick="filterByAttrEl(this)">${escapeHtml(item.format)}</span>`:''}${item.year?` · <span class="attr-link" data-field="year" data-value="${item.year}" data-type="${item.type}" onclick="filterByAttrEl(this)">${item.year}</span>`:''}${item.publisher?' · '+escapeHtml(item.publisher):''}${item.barcode?' · '+escapeHtml(item.barcode):''}${item.index_number?' · Indeks: '+escapeHtml(item.index_number):''}</div>
       <dl class="record-fields">
         ${item.original_title ? `<div class="record-row"><dt>Tytuł oryginału</dt><dd>${escapeHtml(item.original_title)}</dd></div>` : ''}
-        ${item.creator ? `<div class="record-row"><dt>${t('author')}</dt><dd><span class="attr-link" data-field="creator" data-value="${escapeHtml(item.creator)}" onclick="filterByAttrEl(this)">${escapeHtml(item.creator)}</span></dd></div>` : ''}
+        ${item.creator ? `<div class="record-row"><dt>${CREATOR_LABELS[item.type]}</dt><dd><span class="attr-link" data-field="creator" data-value="${escapeHtml(item.creator)}" onclick="filterByAttrEl(this)">${escapeHtml(item.creator)}</span></dd></div>` : ''}
         ${item.publisher ? `<div class="record-row"><dt>${t('publisher')}</dt><dd>${escapeHtml(item.publisher)}</dd></div>` : ''}
         ${item.year ? `<div class="record-row"><dt>${t('year_of_release')}</dt><dd><span class="attr-link" data-field="year" data-value="${item.year}" data-type="${item.type}" onclick="filterByAttrEl(this)">${item.year}</span></dd></div>` : ''}
         ${item.format ? `<div class="record-row"><dt>${t('col_format')}</dt><dd><span class="attr-link" data-field="format" data-value="${escapeHtml(item.format)}" onclick="filterByAttrEl(this)">${escapeHtml(item.format)}</span></dd></div>` : ''}
@@ -3848,6 +3914,7 @@ function editItem(id){
     // gdy formularz zapisywał ją przy każdej edycji, nawet bez wpisanej ceny (patrz saveItem()).
     purchase_currency: item.purchase_price != null ? (item.purchase_currency || 'GBP') : 'GBP',
     purchase_country: item.purchase_country || '',
+    is_gift: item.is_gift || false,
     cover_url: item.cover_url || '',
     index_number: item.index_number || '',
     publisher: item.publisher || '',
@@ -4486,11 +4553,11 @@ function csvEscape(v){
 }
 
 function exportCsv(){
-  const cols = ['title','original_title','type','creator','publisher','format','year','barcode','index_number','rating','status','watched','purchase_price','purchase_currency','purchase_country','notes','personal_notes','created_at'];
-  const header = ['Tytuł','Tytuł oryginału','Rodzaj','Autor/Reżyser/Artysta','Wydawnictwo','Format','Rok','Kod kreskowy','Indeks','Ocena','Status','Obejrzane','Cena zakupu','Waluta','Kraj zakupu','Opis','Notatki','Data dodania'];
+  const cols = ['title','original_title','type','creator','publisher','format','year','barcode','index_number','rating','status','watched','purchase_price','purchase_currency','purchase_country','is_gift','notes','personal_notes','created_at'];
+  const header = ['Tytuł','Tytuł oryginału','Rodzaj','Autor/Reżyser/Artysta','Wydawnictwo','Format','Rok','Kod kreskowy','Indeks','Ocena','Status','Obejrzane','Cena zakupu','Waluta','Kraj zakupu','Prezent','Opis','Notatki','Data dodania'];
   const cellValue = (item, col) => {
     if (col === 'type') return TYPE_LABELS[item.type] || item.type;
-    if (col === 'watched') return item.watched ? 'tak' : 'nie';
+    if (col === 'watched' || col === 'is_gift') return item[col] ? 'tak' : 'nie';
     if (col === 'status') return item.status === 'wishlist' ? 'lista życzeń' : 'kolekcja';
     return item[col];
   };

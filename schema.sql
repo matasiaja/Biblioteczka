@@ -336,3 +336,10 @@ update items set purchase_currency = null where purchase_price is null and purch
 -- ============================================
 alter table items add column if not exists original_title text;
 alter table items add column if not exists purchase_country text;
+
+-- ============================================
+-- MIGRACJA: flaga "prezent" (uruchom ręcznie w SQL Editorze, jeśli baza już istnieje) —
+-- czysto informacyjna, nie wyłącza sprawdzania wyceny rynkowej (CEX/eBay) ani nie
+-- wymusza pustej ceny zakupu.
+-- ============================================
+alter table items add column if not exists is_gift boolean not null default false;
