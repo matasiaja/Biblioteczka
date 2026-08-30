@@ -567,18 +567,28 @@ document.addEventListener('keydown', function(e){
   window.history.back();
 });
 
-// Spacja poza polem tekstowym: na karcie pozycji odpala "Sprawdź cenę teraz" (żeby
-// przeglądając kolekcję Poprzednia/Następna + spacja dało się szybko sprawdzać wyceny bez
-// sięgania po mysz), a w każdym innym miejscu skacze prosto do pola skanowania — tak jak
-// dotychczas, niezależnie jak głęboko w nawigacji user się aktualnie znajduje.
+// Spacja poza polem tekstowym skacze prosto do pola skanowania — niezależnie od tego jak
+// głęboko w nawigacji (karta pozycji, formularz nowej pozycji...) user się aktualnie znajduje.
 document.addEventListener('keydown', function(e){
   if (e.key !== ' ') return;
   const tag = document.activeElement ? document.activeElement.tagName.toLowerCase() : '';
   const editable = document.activeElement && document.activeElement.isContentEditable;
   if (tag === 'input' || tag === 'textarea' || tag === 'select' || editable) return;
   e.preventDefault();
-  if (state.openItemId){ checkMarketPriceNow(state.openItemId); return; }
   setTab('scan');
+});
+
+// Enter poza polem tekstowym/przyciskiem, na karcie pozycji, odpala "Sprawdź cenę teraz" —
+// pomijamy button/a, żeby nie kolidować z domyślnym Enter=kliknięcie na aktualnie
+// zaznaczonym przycisku (np. Poprzednia/Następna po nawigacji Tabem).
+document.addEventListener('keydown', function(e){
+  if (e.key !== 'Enter') return;
+  if (!state.openItemId) return;
+  const tag = document.activeElement ? document.activeElement.tagName.toLowerCase() : '';
+  const editable = document.activeElement && document.activeElement.isContentEditable;
+  if (tag === 'input' || tag === 'textarea' || tag === 'select' || tag === 'button' || tag === 'a' || editable) return;
+  e.preventDefault();
+  checkMarketPriceNow(state.openItemId);
 });
 
 // Strzałki lewo/prawo na karcie pozycji = Poprzednia/Następna (patrz przyciski w openItem()) —
