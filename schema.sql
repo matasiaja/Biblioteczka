@@ -311,3 +311,11 @@ create policy "auth_full_access" on price_history for all
 -- zostają bez zmian)
 -- ============================================
 alter table items alter column purchase_currency set default 'GBP';
+
+-- ============================================
+-- MIGRACJA: nadpisanie już zapisanych pozycji z PLN na GBP (uruchom ręcznie w SQL
+-- Editorze — to dotyczy pozycji, którym cena zakupu została wpisana zanim domyślną
+-- walutę zmieniono na GBP; zmienia tylko te, u których waluta wciąż jest 'PLN', więc
+-- jest bezpieczna do wielokrotnego uruchomienia)
+-- ============================================
+update items set purchase_currency = 'GBP' where purchase_currency = 'PLN';
