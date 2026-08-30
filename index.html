@@ -2233,7 +2233,7 @@ function renderAddForm(main){
       ${l.type === 'movie' ? renderOmdbSearchBox(l) : ''}
       ${l.type === 'movie' ? renderTmdbSearchBox(l) : ''}
       ${l.type === 'music' ? renderMusicBrainzSearchBox(l) : ''}
-      <label>Tytuł</label>
+      <label>Tytuł (pozycja posiadana)</label>
       <input id="f-title" value="${escapeHtml(l.title)}" placeholder="Tytuł" oninput="syncDraftField('title', this.value)">
       <label>Tytuł oryginału <span class="meta" style="font-weight:400;">(opcjonalnie)</span></label>
       <input id="f-original-title" value="${escapeHtml(l.original_title||'')}" placeholder="np. tytuł w oryginalnym języku" oninput="syncDraftField('original_title', this.value)">
