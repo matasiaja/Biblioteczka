@@ -306,7 +306,7 @@ const VIDEOGAME_FORMAT_GROUPS = {
 const TYPE_FORMATS = {
   book: ['papierowa miękka', 'papierowa twarda'],
   movie: ['DVD', 'Blu-ray', 'VHS'],
-  music: ['CD', 'winyl', 'kaseta'],
+  music: ['CD', 'audiobook', 'winyl', 'kaseta'],
   videogame: Object.values(VIDEOGAME_FORMAT_GROUPS).flat(),
   boardgame: ['gra podstawowa', 'dodatek']
 };
@@ -4450,8 +4450,11 @@ function renderSettings(main){
     <div class="card">
       <div class="section-title">Statystyki</div>
       ${state.bulkPriceCheckProgress ? `
-        <div class="badge accent" style="display:block;margin-bottom:12px;padding:8px 12px;">
-          🔄 Sprawdzanie cen: ${state.bulkPriceCheckProgress.checked} / ${state.bulkPriceCheckProgress.total} pozycji…
+        <div class="card" style="background:var(--surface-2);padding:12px;margin-bottom:12px;">
+          <div class="meta" style="margin-bottom:6px;">🔄 Sprawdzanie cen: ${state.bulkPriceCheckProgress.checked} / ${state.bulkPriceCheckProgress.total} pozycji…</div>
+          <div style="background:var(--surface);border-radius:4px;overflow:hidden;height:8px;">
+            <div style="width:${Math.round(state.bulkPriceCheckProgress.checked/state.bulkPriceCheckProgress.total*100)}%;background:var(--accent);height:100%;transition:width .2s;"></div>
+          </div>
         </div>
       ` : ''}
       <div class="stat-group-label">Kolekcja</div>
