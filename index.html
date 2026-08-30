@@ -84,6 +84,14 @@
      zamiast stać osobno nad nim; tekst przycisku zostaje wyśrodkowany. */
   .btn-with-badge{position:relative;}
   .btn-with-badge .btn-badge{position:absolute;left:14px;top:50%;transform:translateY(-50%);}
+  /* Przycisk "Sprawdź cenę teraz" — cena po ostatniej aktualizacji przyklejona do lewej
+     krawędzi (kolor/strzałka wg trendu względem ceny zakupu, patrz marketPriceButtonHtml()),
+     cena zakupu przyklejona do prawej; tekst przycisku zostaje wyśrodkowany. */
+  .btn-with-price{position:relative;}
+  .btn-with-price .btn-price-left,
+  .btn-with-price .btn-price-right{position:absolute;top:50%;transform:translateY(-50%);display:flex;align-items:center;gap:4px;font-size:12px;font-weight:600;}
+  .btn-with-price .btn-price-left{left:14px;}
+  .btn-with-price .btn-price-right{right:14px;}
   .item-row{display:flex;justify-content:space-between;align-items:center;padding:12px 0;border-bottom:1px solid var(--border);cursor:pointer;gap:10px;}
   .item-row:last-child{border-bottom:none;}
   .item-row .name{font-weight:500;font-size:14px;}
@@ -3359,6 +3367,18 @@ function marketPriceRowHtml(p){
   }
   return '';
 }
+// Jedna "reprezentatywna" cena z ostatniej aktualizacji do porównania z ceną zakupu —
+// wolimy CEX (jedno konkretne "sellPrice"), bo eBay to zawsze widełki, więc bierzemy
+// z niego medianę jako najbliższy odpowiednik pojedynczej ceny.
+function bestMarketPrice(item){
+  const prices = item.market_prices || [];
+  const cex = prices.find(p => p.source === 'CEX' && p.sellPrice != null);
+  if (cex) return { value: cex.sellPrice, currency: cex.currency };
+  const ebay = prices.find(p => p.source === 'eBay' && p.median != null);
+  if (ebay) return { value: ebay.median, currency: ebay.currency };
+  return null;
+}
+
 function marketPriceHtml(item){
   const prices = item.market_prices || [];
   const rows = prices.map(marketPriceRowHtml).join('');
@@ -3375,8 +3395,28 @@ function marketPriceHtml(item){
       ${rows || `<div class="record-row"><dt>Cena po aktualizacji</dt><dd class="meta">${updated ? 'Nie znaleziono w CEX/eBay' : 'Jeszcze nie sprawdzano'}</dd></div>`}
     </dl>
     <div class="meta" style="margin-bottom:10px;">${updated ? 'Ostatnia aktualizacja: ' + updated : 'Ceny CEX/eBay same się doszukają co jakiś czas w tle — możesz też sprawdzić od razu.'}</div>
-    <button class="btn secondary" style="margin-bottom:10px;" onclick="checkMarketPriceNow('${item.id}')" id="market-price-btn-${item.id}">Sprawdź cenę teraz</button>
+    ${marketPriceButtonHtml(item)}
   `;
+}
+
+// Przycisk "Sprawdź cenę teraz" pokazuje po lewej ostatnią wycenę rynkową (na zielono ze
+// strzałką w górę, jeśli poszła w górę względem ceny zakupu, na czerwono ze strzałką w dół,
+// jeśli spadła — jak na giełdzie), a po prawej stałą cenę zakupu. Kolor/strzałkę pokazujemy
+// tylko wtedy, gdy obie ceny są w tej samej walucie — inaczej porównanie byłoby mylące
+// (w projekcie nie ma API kursów walut, patrz komentarz przy market_prices w schema.sql).
+function marketPriceButtonHtml(item){
+  const best = bestMarketPrice(item);
+  let leftHtml = '';
+  if (best){
+    let arrow = '', color = '';
+    if (item.purchase_price != null && item.purchase_currency === best.currency){
+      if (best.value > item.purchase_price){ arrow = '▲'; color = 'var(--ok)'; }
+      else if (best.value < item.purchase_price){ arrow = '▼'; color = 'var(--danger)'; }
+    }
+    leftHtml = `<span class="btn-price-left"${color?` style="color:${color};"`:''}>${arrow ? `<span>${arrow}</span>` : ''}<span>${best.value} ${best.currency}</span></span>`;
+  }
+  const rightHtml = item.purchase_price != null ? `<span class="btn-price-right">${item.purchase_price} ${item.purchase_currency||'GBP'}</span>` : '';
+  return `<button class="btn secondary btn-with-price" style="margin-bottom:10px;" onclick="checkMarketPriceNow('${item.id}')" id="market-price-btn-${item.id}">${leftHtml}<span>Sprawdź cenę teraz</span>${rightHtml}</button>`;
 }
 
 async function checkMarketPriceNow(itemId){
