@@ -1651,6 +1651,10 @@ function isValidBarcodeChecksum(code){
 }
 
 let lookupLog = [];
+// Ranking z ostatniego renderSettings() (patrz computePortfolioPerformance()) — trzymany
+// poza state, bo to tylko pochodna danych do obsługi kliknięć w perfRowHtml(), nie
+// coś co appka musi pamiętać między odświeżeniami.
+let PERF_RANKING_CACHE = [];
 function logStep(source, status){
   lookupLog.push({ source, status });
 }
@@ -3588,6 +3592,56 @@ function bestMarketPrice(item){
   return null;
 }
 
+// Zaawansowane statystyki cenowe (Ustawienia → Statystyki, sekcja "Wycena portfela") —
+// porównuje cenę zakupu z ostatnią wyceną rynkową jak notowania giełdowe: procentowa
+// zmiana, zielono/czerwono, ▲/▼. Obie ceny przeliczamy na GBP (patrz convertToGBP()),
+// więc porównanie działa nawet gdy kupiono w innej walucie niż ta z CEX/eBay — czego
+// zwykły wskaźnik trendu na przycisku "Sprawdź cenę teraz" (patrz marketPriceButtonHtml())
+// celowo nie robi, bo tam nie chcieliśmy niejawnie przeliczać pojedynczej ceny.
+function computePortfolioPerformance(){
+  const owned = state.items.filter(i => (i.status||'owned') === 'owned');
+  const rows = [];
+  let totalPurchaseGBP = 0, totalMarketGBP = 0;
+  owned.forEach(i => {
+    if (i.purchase_price == null) return;
+    const purchaseGBP = convertToGBP(i.purchase_price, i.purchase_currency);
+    if (purchaseGBP == null) return;
+    const best = bestMarketPrice(i);
+    if (!best) return;
+    const marketGBP = convertToGBP(best.value, best.currency);
+    if (marketGBP == null) return;
+    const changeAbs = marketGBP - purchaseGBP;
+    const changePct = purchaseGBP > 0 ? (changeAbs / purchaseGBP) * 100 : 0;
+    rows.push({ id: i.id, title: i.title, purchaseGBP, marketGBP, changeAbs, changePct });
+    totalPurchaseGBP += purchaseGBP;
+    totalMarketGBP += marketGBP;
+  });
+  rows.sort((a,b) => b.changePct - a.changePct);
+  const gainers = rows.filter(r => r.changePct > 0).slice(0, 10);
+  const losers = rows.filter(r => r.changePct < 0).slice(-10).reverse();
+  return { rows, gainers, losers, totalPurchaseGBP, totalMarketGBP };
+}
+
+// Otwiera pozycję z rankingu wzrostów/spadków i ustawia Poprzednia/Następna tak, żeby
+// przeglądać cały ranking (od największego wzrostu do największego spadku) strzałkami,
+// zamiast tylko tej jednej listy (gainers/losers), z której faktycznie kliknięto.
+function openItemFromPerf(id, rows){
+  state.visibleIds = rows.map(r=>r.id);
+  openItem(id);
+}
+
+function perfRowHtml(r){
+  const up = r.changePct >= 0;
+  const color = up ? 'var(--ok)' : 'var(--danger)';
+  return `<div class="item-row" onclick="openItemFromPerf('${r.id}', PERF_RANKING_CACHE)">
+    <div class="row-title">
+      <div class="name">${escapeHtml(r.title)}</div>
+      <div class="meta">£${r.purchaseGBP.toFixed(2)} → £${r.marketGBP.toFixed(2)}</div>
+    </div>
+    <div style="font-weight:700;white-space:nowrap;color:${color};">${up?'▲':'▼'} ${up?'+':''}${r.changePct.toFixed(1)}%</div>
+  </div>`;
+}
+
 function marketPriceHtml(item){
   const prices = item.market_prices || [];
   const rows = prices.map(marketPriceRowHtml).join('');
@@ -4270,6 +4324,11 @@ function renderSettings(main){
     valuedCount++;
   });
 
+  const perf = computePortfolioPerformance();
+  PERF_RANKING_CACHE = perf.rows;
+  const perfChangeAbs = perf.totalMarketGBP - perf.totalPurchaseGBP;
+  const perfChangePct = perf.totalPurchaseGBP > 0 ? (perfChangeAbs / perf.totalPurchaseGBP) * 100 : 0;
+
   const formatCounts = {};
   owned.forEach(i => { if (i.format) formatCounts[i.format] = (formatCounts[i.format]||0) + 1; });
   const formatRows = Object.entries(formatCounts).sort((a,b)=>b[1]-a[1]);
@@ -4335,6 +4394,37 @@ function renderSettings(main){
         </div>
         <div class="meta" style="margin-top:4px;">Przeliczone z ${valuedCount} ${valuedCount===1?'pozycji':'pozycji'} wg dzisiejszego kursu (Frankfurter/EBC)${skippedValueCount ? `; ${skippedValueCount} z ceną w walucie bez znanego kursu pominięto` : ''}.</div>
       ` : (owned.some(i=>i.purchase_price!=null) ? `<div class="meta" style="margin-top:4px;">Wczytuję kursy walut, żeby policzyć łączną wartość kolekcji…</div>` : '')}
+      ${perf.rows.length ? `
+        <div class="stat-group-label">📈 Wycena portfela</div>
+        <div class="card" style="background:var(--surface-2);padding:16px;margin-bottom:12px;">
+          <div style="display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:12px;">
+            <div>
+              <div class="meta">Zainwestowano</div>
+              <div style="font-size:20px;font-weight:700;">£${perf.totalPurchaseGBP.toFixed(2)}</div>
+            </div>
+            <div style="text-align:right;">
+              <div class="meta">Aktualna wycena</div>
+              <div style="font-size:20px;font-weight:700;">£${perf.totalMarketGBP.toFixed(2)}</div>
+            </div>
+          </div>
+          <div style="margin-top:10px;font-size:17px;font-weight:700;color:${perfChangeAbs>=0?'var(--ok)':'var(--danger)'};">
+            ${perfChangeAbs>=0?'▲':'▼'} £${Math.abs(perfChangeAbs).toFixed(2)} (${perfChangeAbs>=0?'+':''}${perfChangePct.toFixed(1)}%)
+          </div>
+          <div class="meta" style="margin-top:8px;">Na podstawie ${perf.rows.length} ${perf.rows.length===1?'pozycji':'pozycji'} z ceną zakupu i sprawdzoną wyceną rynkową — reszta kolekcji jeszcze nie ma obu wartości naraz.</div>
+        </div>
+        ${perf.gainers.length ? `
+          <div class="stat-group-label">🟢 Największe wzrosty</div>
+          <div class="card" style="padding:4px 12px;margin-bottom:12px;">
+            ${perf.gainers.map(perfRowHtml).join('')}
+          </div>
+        ` : ''}
+        ${perf.losers.length ? `
+          <div class="stat-group-label">🔴 Największe spadki</div>
+          <div class="card" style="padding:4px 12px;margin-bottom:12px;">
+            ${perf.losers.map(perfRowHtml).join('')}
+          </div>
+        ` : ''}
+      ` : ''}
       <div class="stat-group-label">Wypożyczenia</div>
       <div class="stat-grid">
         <div class="stat-tile" onclick="goToStat('all_loans')"><div class="stat-num">${state.loans.length}</div><div class="stat-label">Aktualnie</div></div>
