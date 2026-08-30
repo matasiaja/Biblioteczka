@@ -56,6 +56,16 @@ async function handleGoogleBooks(url, env) {
   return json(body, res.status);
 }
 
+// Kursy walut (Frankfurter — darmowe, bez klucza, dane referencyjne EBC, aktualizowane
+// w dni robocze) — do przeliczania cen zakupu z różnych krajów na jedną walutę bazową
+// (GBP) przy sumowaniu wartości kolekcji w appce. Frankfurter nie ustawia nagłówków CORS,
+// stąd zwykły proxy jak reszta źródeł w tym pliku.
+async function handleFxRates(url) {
+  const base = url.searchParams.get('base') || 'GBP';
+  const res = await fetch(`https://api.frankfurter.dev/v1/latest?base=${encodeURIComponent(base)}`);
+  return json(await res.text(), res.status);
+}
+
 async function handleTmdb(url, env) {
   const key = env.TMDB_API_KEY;
   if (!key) return json({ success: false, status_message: 'TMDB_API_KEY not configured' });
@@ -249,6 +259,7 @@ export default {
     if (url.pathname.endsWith('/cex-price')) return handleCexPrice(url);
     if (url.pathname.endsWith('/ebay-price')) return handleEbayPrice(url, env);
     if (url.pathname.endsWith('/market-price')) return handleMarketPrice(url, env);
+    if (url.pathname.endsWith('/fx-rates')) return handleFxRates(url);
     return json({ error: 'not found' }, 404);
   },
   // Cron trigger (patrz wrangler.toml [triggers]) — cykliczne odświeżanie wycen całej

@@ -306,6 +306,14 @@ const TYPE_FORMATS = {
   videogame: Object.values(VIDEOGAME_FORMAT_GROUPS).flat(),
   boardgame: ['gra podstawowa', 'dodatek']
 };
+// Kraj zakupu — czysto informacyjne (np. skąd/w jakim wydaniu masz daną pozycję), nie
+// wpływa automatycznie na wybór waluty w polu "Cena zakupu".
+const PURCHASE_COUNTRIES = [
+  'Polska', 'Wielka Brytania', 'Niemcy', 'Francja', 'Włochy', 'Hiszpania', 'Portugalia',
+  'Holandia', 'Belgia', 'Austria', 'Szwajcaria', 'Szwecja', 'Norwegia', 'Dania', 'Finlandia',
+  'Irlandia', 'Czechy', 'Słowacja', 'Węgry', 'Rumunia', 'Grecja', 'USA', 'Kanada', 'Japonia',
+  'Korea Południowa', 'Australia', 'Inny'
+];
 const CREATOR_LABELS = { book: 'Autor', movie: 'Reżyser', music: 'Artysta', videogame: 'Producent', boardgame: 'Autor' };
 const YEAR_LABELS = { book: 'Rok wydania', movie: 'Rok premiery', music: 'Rok wydania', videogame: 'Rok wydania', boardgame: 'Rok wydania' };
 const CONSUMED_LABELS = { book: 'Przeczytane', movie: 'Obejrzane', music: 'Odsłuchane', videogame: 'Ukończona', boardgame: 'Zagrana' };
@@ -454,6 +462,7 @@ let state = {
   mfaEnrollment: null,
   items: [],
   loans: [],
+  fxRates: null, // { base:'GBP', date, rates:{EUR:.., USD:..} } — patrz loadFxRates()
   scannerRunning: false,
   scannedBarcode: null,
   scannedItem: null,
@@ -972,6 +981,38 @@ async function loadAll(){
   state.items = items || [];
   state.loans = loans || [];
   state.itemsLoaded = true;
+  loadFxRates(); // nie czekamy — nie blokuje reszty appki, statystyki dociągną się gdy dojadą
+}
+
+// Kursy walut (Frankfurter przez proxy w Workerze) do przeliczania cen zakupu z różnych
+// krajów na GBP przy sumowaniu wartości kolekcji (patrz convertToGBP()). Kurs zmienia się
+// raz dziennie w dni robocze, więc trzymamy go w localStorage na cały dzień zamiast
+// odpytywać przy każdym starcie appki.
+async function loadFxRates(){
+  try {
+    const today = todayIso();
+    const cached = JSON.parse(localStorage.getItem('bib_fx_rates') || 'null');
+    if (cached && cached.fetchedOn === today){
+      state.fxRates = cached;
+      return;
+    }
+    const res = await fetch(`${FUNCTIONS_BASE}/fx-rates?base=GBP`);
+    const data = await res.json();
+    if (!data.rates) return;
+    state.fxRates = { base: 'GBP', date: data.date, rates: data.rates, fetchedOn: today };
+    localStorage.setItem('bib_fx_rates', JSON.stringify(state.fxRates));
+    if (state.tab === 'settings') renderTab();
+  } catch(e){ /* brak kursów — statystyka wartości kolekcji po prostu się nie pokaże */ }
+}
+
+// null, jeśli waluta jest nieznana albo kursy jeszcze się nie wczytały — wywołujący
+// musi to obsłużyć (patrz totalCollectionValueGBP()), a nie zakładać zawsze liczbę.
+function convertToGBP(amount, currency){
+  if (amount == null || !currency) return null;
+  if (currency === 'GBP') return amount;
+  const rate = state.fxRates && state.fxRates.rates && state.fxRates.rates[currency];
+  if (!rate) return null;
+  return amount / rate;
 }
 
 function activeLoanFor(itemId){
@@ -2194,6 +2235,8 @@ function renderAddForm(main){
       ${l.type === 'music' ? renderMusicBrainzSearchBox(l) : ''}
       <label>Tytuł</label>
       <input id="f-title" value="${escapeHtml(l.title)}" placeholder="Tytuł" oninput="syncDraftField('title', this.value)">
+      <label>Tytuł oryginału <span class="meta" style="font-weight:400;">(opcjonalnie)</span></label>
+      <input id="f-original-title" value="${escapeHtml(l.original_title||'')}" placeholder="np. tytuł w oryginalnym języku" oninput="syncDraftField('original_title', this.value)">
       <label id="f-creator-label">${CREATOR_LABELS[l.type]}</label>
       <input id="f-creator" value="${escapeHtml(l.creator)}" placeholder="Kto stworzył" oninput="syncDraftField('creator', this.value)">
       ${l.type === 'book' ? `
@@ -2214,6 +2257,11 @@ function renderAddForm(main){
           ${['GBP','PLN','EUR','USD'].map(c=>`<option value="${c}" ${(l.purchase_currency||'GBP')===c?'selected':''}>${c}</option>`).join('')}
         </select>
       </div>
+      <label>Kraj zakupu <span class="meta" style="font-weight:400;">(opcjonalnie)</span></label>
+      <select id="f-purchase-country" onchange="syncDraftField('purchase_country', this.value)">
+        <option value="">— nie podano —</option>
+        ${PURCHASE_COUNTRIES.map(c=>`<option value="${escapeHtml(c)}" ${l.purchase_country===c?'selected':''}>${escapeHtml(c)}</option>`).join('')}
+      </select>
       <label>Ocena</label>
       <div style="margin-bottom:14px;">
         ${[1,2,3,4,5].map(n=>`<button type="button" onclick="setRating(${n})" style="background:none;border:none;cursor:pointer;font-size:26px;line-height:1;padding:2px 3px;color:${(l.rating||0)>=n?'var(--warn)':'var(--border)'};">★</button>`).join('')}
@@ -2626,11 +2674,13 @@ async function saveItem(allowDuplicate){
     publisher: (publisherEl ? publisherEl.value.trim() : '') || null,
     type: document.getElementById('f-type').value,
     title,
+    original_title: document.getElementById('f-original-title').value.trim() || null,
     creator: document.getElementById('f-creator').value.trim() || null,
     format: document.getElementById('f-format').value.trim() || null,
     year: parseInt(document.getElementById('f-year').value) || null,
     purchase_price: purchasePrice,
     purchase_currency: purchasePrice != null ? (document.getElementById('f-purchase-currency').value || 'GBP') : null,
+    purchase_country: document.getElementById('f-purchase-country').value || null,
     cover_url: l.cover_url || null,
     notes: (notesEl ? notesEl.value.trim() : '') || null,
     personal_notes: (personalNotesEl ? personalNotesEl.value.trim() : '') || null,
@@ -3261,6 +3311,7 @@ function renderSearch(main){
   const hasFilter = !!(q || yearQ || formatQ);
   const results = sortByField(hasFilter ? state.items.filter(i =>
     (!q || (i.title||'').toLowerCase().includes(q) ||
+      (i.original_title||'').toLowerCase().includes(q) ||
       (i.creator||'').toLowerCase().includes(q) ||
       (i.publisher||'').toLowerCase().includes(q) ||
       (i.barcode||'').toLowerCase().includes(q) ||
@@ -3397,6 +3448,7 @@ function marketPriceHtml(item){
     <div class="section-title" style="margin-top:4px;">Wycena</div>
     <dl class="record-fields">
       ${item.purchase_price != null ? `<div class="record-row"><dt>Cena zakupu</dt><dd>${item.purchase_price} ${item.purchase_currency||'GBP'}</dd></div>` : ''}
+      ${item.purchase_country ? `<div class="record-row"><dt>Kraj zakupu</dt><dd>${escapeHtml(item.purchase_country)}</dd></div>` : ''}
       ${rows || `<div class="record-row"><dt>Cena po aktualizacji</dt><dd class="meta">${updated ? 'Nie znaleziono w CEX/eBay' : 'Jeszcze nie sprawdzano'}</dd></div>`}
     </dl>
     <div class="meta" style="margin-bottom:10px;">${updated ? 'Ostatnia aktualizacja: ' + updated : 'Ceny CEX/eBay same się doszukają co jakiś czas w tle — możesz też sprawdzić od razu.'}</div>
@@ -3480,6 +3532,7 @@ function openItem(id){
       <h2 style="margin:0 0 4px;">${escapeHtml(item.title)}</h2>
       <div class="meta mono item-detail-meta-compact" style="color:var(--text-dim);margin-bottom:14px;">${item.creator ? `<span class="attr-link" data-field="creator" data-value="${escapeHtml(item.creator)}" onclick="filterByAttrEl(this)">${escapeHtml(item.creator)}</span>` : '—'}${item.format?` · <span class="attr-link" data-field="format" data-value="${escapeHtml(item.format)}" onclick="filterByAttrEl(this)">${escapeHtml(item.format)}</span>`:''}${item.year?` · <span class="attr-link" data-field="year" data-value="${item.year}" data-type="${item.type}" onclick="filterByAttrEl(this)">${item.year}</span>`:''}${item.publisher?' · '+escapeHtml(item.publisher):''}${item.barcode?' · '+escapeHtml(item.barcode):''}${item.index_number?' · Indeks: '+escapeHtml(item.index_number):''}</div>
       <dl class="record-fields">
+        ${item.original_title ? `<div class="record-row"><dt>Tytuł oryginału</dt><dd>${escapeHtml(item.original_title)}</dd></div>` : ''}
         ${item.creator ? `<div class="record-row"><dt>${t('author')}</dt><dd><span class="attr-link" data-field="creator" data-value="${escapeHtml(item.creator)}" onclick="filterByAttrEl(this)">${escapeHtml(item.creator)}</span></dd></div>` : ''}
         ${item.publisher ? `<div class="record-row"><dt>${t('publisher')}</dt><dd>${escapeHtml(item.publisher)}</dd></div>` : ''}
         ${item.year ? `<div class="record-row"><dt>${t('year_of_release')}</dt><dd><span class="attr-link" data-field="year" data-value="${item.year}" data-type="${item.type}" onclick="filterByAttrEl(this)">${item.year}</span></dd></div>` : ''}
@@ -3710,6 +3763,7 @@ function editItem(id){
     barcode: item.barcode || null,
     type: item.type,
     title: item.title || '',
+    original_title: item.original_title || '',
     creator: item.creator || '',
     format: item.format || '',
     year: item.year || '',
@@ -3718,6 +3772,7 @@ function editItem(id){
     // w purchase_currency — starsze zapisy mogły tam zostawić "przypadkową" walutę z czasów,
     // gdy formularz zapisywał ją przy każdej edycji, nawet bez wpisanej ceny (patrz saveItem()).
     purchase_currency: item.purchase_price != null ? (item.purchase_currency || 'GBP') : 'GBP',
+    purchase_country: item.purchase_country || '',
     cover_url: item.cover_url || '',
     index_number: item.index_number || '',
     publisher: item.publisher || '',
@@ -4031,6 +4086,18 @@ function renderSettings(main){
   const avgRating = rated.length ? (rated.reduce((s,i)=>s+i.rating,0) / rated.length) : 0;
   const recent = [...owned].sort((a,b)=> new Date(b.created_at) - new Date(a.created_at)).slice(0,5);
 
+  // Łączna wartość kolekcji w GBP — sumujemy tylko pozycje, których walutę udało się
+  // przeliczyć (patrz convertToGBP()); reszta (bez ceny, albo z walutą bez kursu) trafia
+  // do skippedValueCount, żeby suma nie wyglądała na kompletną, kiedy nią nie jest.
+  let totalValueGBP = 0, valuedCount = 0, skippedValueCount = 0;
+  owned.forEach(i => {
+    if (i.purchase_price == null) return;
+    const v = convertToGBP(i.purchase_price, i.purchase_currency);
+    if (v == null) { skippedValueCount++; return; }
+    totalValueGBP += v;
+    valuedCount++;
+  });
+
   const formatCounts = {};
   owned.forEach(i => { if (i.format) formatCounts[i.format] = (formatCounts[i.format]||0) + 1; });
   const formatRows = Object.entries(formatCounts).sort((a,b)=>b[1]-a[1]);
@@ -4089,6 +4156,13 @@ function renderSettings(main){
           ${toConsumeCount ? `<div class="stat-tile" onclick="goToStat('to_consume')"><div class="stat-num" style="color:var(--accent);">${toConsumeCount}</div><div class="stat-label">Do obejrzenia / przeczytania / odsłuchania</div></div>` : ''}
         </div>
       ` : ''}
+      ${valuedCount ? `
+        <div class="stat-group-label">Wartość</div>
+        <div class="stat-grid">
+          <div class="stat-tile" style="cursor:default;"><div class="stat-num">£${totalValueGBP.toFixed(2)}</div><div class="stat-label">Łączna cena zakupu (GBP)</div></div>
+        </div>
+        <div class="meta" style="margin-top:4px;">Przeliczone z ${valuedCount} ${valuedCount===1?'pozycji':'pozycji'} wg dzisiejszego kursu (Frankfurter/EBC)${skippedValueCount ? `; ${skippedValueCount} z ceną w walucie bez znanego kursu pominięto` : ''}.</div>
+      ` : (owned.some(i=>i.purchase_price!=null) ? `<div class="meta" style="margin-top:4px;">Wczytuję kursy walut, żeby policzyć łączną wartość kolekcji…</div>` : '')}
       <div class="stat-group-label">Wypożyczenia</div>
       <div class="stat-grid">
         <div class="stat-tile" onclick="goToStat('all_loans')"><div class="stat-num">${state.loans.length}</div><div class="stat-label">Aktualnie</div></div>
@@ -4337,8 +4411,8 @@ function csvEscape(v){
 }
 
 function exportCsv(){
-  const cols = ['title','type','creator','publisher','format','year','barcode','index_number','rating','status','watched','notes','personal_notes','created_at'];
-  const header = ['Tytuł','Rodzaj','Autor/Reżyser/Artysta','Wydawnictwo','Format','Rok','Kod kreskowy','Indeks','Ocena','Status','Obejrzane','Opis','Notatki','Data dodania'];
+  const cols = ['title','original_title','type','creator','publisher','format','year','barcode','index_number','rating','status','watched','purchase_price','purchase_currency','purchase_country','notes','personal_notes','created_at'];
+  const header = ['Tytuł','Tytuł oryginału','Rodzaj','Autor/Reżyser/Artysta','Wydawnictwo','Format','Rok','Kod kreskowy','Indeks','Ocena','Status','Obejrzane','Cena zakupu','Waluta','Kraj zakupu','Opis','Notatki','Data dodania'];
   const cellValue = (item, col) => {
     if (col === 'type') return TYPE_LABELS[item.type] || item.type;
     if (col === 'watched') return item.watched ? 'tak' : 'nie';

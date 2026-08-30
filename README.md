@@ -68,5 +68,11 @@ Migracja bazy (nowe kolumny `purchase_price`/`market_prices`/tabela `price_histo
 jest w `schema.sql` — trzeba ją uruchomić ręcznie w Supabase SQL Editorze, jeśli baza
 już istnieje.
 
+**Łączna wartość kolekcji** (Ustawienia → Statystyki) sumuje ceny zakupu przeliczone na
+GBP przez [Frankfurter](https://frankfurter.dev) (darmowe, bez klucza, kursy referencyjne
+EBC aktualizowane w dni robocze) — proxy `/fx-rates` w `worker.js`, bez dodatkowej
+konfiguracji. Pozycje z ceną w walucie, dla której Frankfurter nie ma kursu, są pomijane
+w sumie (i policzone osobno jako "pominięte" w opisie statystyki).
+
 ## Rozwój
 To wersja startowa (MVP) — kolejne funkcje (np. lepsze wyszukiwanie filmów/muzyki po kodzie kreskowym, zdjęcia okładek, eksport, przypomnienia o zwrotach) dojdą w miarę rozwoju projektu.

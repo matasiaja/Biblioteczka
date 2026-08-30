@@ -328,3 +328,11 @@ update items set purchase_currency = 'GBP' where purchase_currency = 'PLN';
 -- (patrz saveItem()) — ta migracja czyści to, co już zostało tak zapisane.
 -- ============================================
 update items set purchase_currency = null where purchase_price is null and purchase_currency is not null;
+
+-- ============================================
+-- MIGRACJA: tytuł oryginału i kraj zakupu (uruchom ręcznie w SQL Editorze, jeśli baza
+-- już istnieje) — oba pola opcjonalne, przydatne przy pozycjach kupionych za granicą
+-- w innym wydaniu/tytule niż polski.
+-- ============================================
+alter table items add column if not exists original_title text;
+alter table items add column if not exists purchase_country text;
