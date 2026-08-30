@@ -2639,6 +2639,11 @@ async function saveItem(allowDuplicate){
       return;
     }
   }
+  // Cena zakupu wpisana/zmieniona teraz jest zwykle "świeższa" niż ostatnia zapisana wycena
+  // rynkowa (CEX/eBay) — odświeżamy ją automatycznie w tle po zapisie, żeby obie liczby na
+  // karcie pozycji były z podobnego okresu, zamiast pokazywać starą wycenę sprzed dodania ceny.
+  const purchasePriceChanged = payload.purchase_price != null &&
+    (l.purchase_price === undefined || l.purchase_price === null || l.purchase_price === '' || Number(l.purchase_price) !== payload.purchase_price);
   const { data, error } = l.editingId
     ? await sb.from('items').update(payload).eq('id', l.editingId).select('id').single()
     : await sb.from('items').insert(payload).select('id').single();
@@ -2665,6 +2670,9 @@ async function saveItem(allowDuplicate){
     if (!wasEditing && state.batchScanMode && state.tab === 'scan' && !isDesktopDevice()) beginScan();
     else if (savedId) openItem(savedId);
   }
+  // Bez await — appka nie ma czekać na CEX/eBay, żeby zamknąć formularz; checkMarketPriceNow()
+  // sama dogra wynik i odświeży kartę pozycji, jeśli w międzyczasie nie zeszliśmy z niej gdzie indziej.
+  if (purchasePriceChanged && savedId) checkMarketPriceNow(savedId);
 }
 
 // ---------------- KOLEKCJA TAB ----------------
