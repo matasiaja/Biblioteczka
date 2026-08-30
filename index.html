@@ -79,6 +79,10 @@
   .badge.warn{background:rgba(255,176,32,.15);color:var(--warn);}
   .badge.danger{background:rgba(255,77,77,.15);color:var(--danger);}
   .badge.accent{background:rgba(124,92,255,.15);color:var(--accent);}
+  /* Odznaka jako klikalny przycisk (np. "Tytuł oryginału?" obok pola Tytuł) — reset
+     domyślnego wyglądu <button>, reszta (kolor/tło/padding) zostaje z .badge. */
+  button.badge{border:none;cursor:pointer;font-family:inherit;}
+  button.badge:hover{filter:brightness(1.2);}
   /* Odznaka wtopiona w przycisk "Wypożycz" — te same kolory statusu co zwykły .badge
      (tu: zielonomiętowy .badge.ok), tylko przyklejona blisko lewej krawędzi przycisku
      zamiast stać osobno nad nim; tekst przycisku zostaje wyśrodkowany. */
@@ -470,6 +474,7 @@ let state = {
   loanScanning: false,
   selectMode: false,
   selectedIds: [],
+  bulkPriceEditing: false,
   loanTypeFilter: 'all',
   loanSelectMode: false,
   selectedLoanIds: [],
@@ -521,6 +526,14 @@ function syncDraftField(field, value){
   if (!state.lookup) return;
   state.lookup[field] = value;
   saveDraft();
+}
+
+// Przycisk "Tytuł oryginału?" przy polu Tytuł — szybkie wypełnienie pola "Tytuł oryginału"
+// tą samą wartością (przydatne np. przy filmach anglojęzycznych bez osobnego tytułu PL).
+function copyTitleToOriginal(){
+  const titleVal = document.getElementById('f-title').value;
+  document.getElementById('f-original-title').value = titleVal;
+  syncDraftField('original_title', titleVal);
 }
 
 // ---------------- NAWIGACJA: fizyczny/systemowy przycisk "Wstecz" ----------------
@@ -2233,7 +2246,10 @@ function renderAddForm(main){
       ${l.type === 'movie' ? renderOmdbSearchBox(l) : ''}
       ${l.type === 'movie' ? renderTmdbSearchBox(l) : ''}
       ${l.type === 'music' ? renderMusicBrainzSearchBox(l) : ''}
-      <label>Tytuł (pozycja posiadana)</label>
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
+        <label style="margin-bottom:5px;">Tytuł (pozycja posiadana)</label>
+        <button type="button" class="badge accent" style="margin-bottom:8px;" onclick="copyTitleToOriginal()" title="Skopiuj do pola 'Tytuł oryginału' poniżej">Tytuł oryginału?</button>
+      </div>
       <input id="f-title" value="${escapeHtml(l.title)}" placeholder="Tytuł" oninput="syncDraftField('title', this.value)">
       <label>Tytuł oryginału <span class="meta" style="font-weight:400;">(opcjonalnie)</span></label>
       <input id="f-original-title" value="${escapeHtml(l.original_title||'')}" placeholder="np. tytuł w oryginalnym języku" oninput="syncDraftField('original_title', this.value)">
@@ -2838,9 +2854,25 @@ function renderList(main){
               <button class="btn small secondary" onclick="cancelSelectMode()">Anuluj</button>
               ${state.listView==='owned' ? `<button class="btn small secondary" onclick="bulkSetWatched(true)" ${state.selectedIds.length===0?'disabled':''}>Oznacz: ${state.typeFilter!=='all' ? CONSUMED_LABELS[state.typeFilter] : 'Obejrzane'}</button>
               <button class="btn small secondary" onclick="bulkSetWatched(false)" ${state.selectedIds.length===0?'disabled':''}>${state.typeFilter!=='all' ? TO_CONSUME_LABELS[state.typeFilter] : 'Do obejrzenia'}</button>` : ''}
+              <button class="btn small secondary" onclick="toggleBulkPriceEditor()" ${state.selectedIds.length===0?'disabled':''}>Ustaw cenę zakupu</button>
               <button class="btn small danger" onclick="bulkDeleteItems()" ${state.selectedIds.length===0?'disabled':''}>Usuń zaznaczone</button>
             </div>
           </div>
+          ${state.bulkPriceEditing ? `
+            <div class="card" style="margin-bottom:12px;padding:12px;">
+              <label>Cena zakupu dla ${state.selectedIds.length} zaznaczonych ${state.selectedIds.length===1?'pozycji':'pozycji'}</label>
+              <div class="row">
+                <input id="bulk-purchase-price" placeholder="np. 10" inputmode="decimal" onkeydown="if(event.key==='Enter'){event.preventDefault();bulkSetPurchasePrice();}">
+                <select id="bulk-purchase-currency" style="flex:0 0 90px;">
+                  ${['GBP','PLN','EUR','USD'].map(c=>`<option value="${c}">${c}</option>`).join('')}
+                </select>
+              </div>
+              <div style="display:flex;gap:8px;">
+                <button class="btn small" onclick="bulkSetPurchasePrice()">Zastosuj do zaznaczonych</button>
+                <button class="btn small secondary" onclick="toggleBulkPriceEditor()">Anuluj</button>
+              </div>
+            </div>
+          ` : ''}
         ` : ''}
         ${(state.missingFilter==='to_consume' && state.toConsumeManualSort) ? '' : sortSelect()}
         ${missingSelect()}
@@ -3406,6 +3438,30 @@ async function bulkSetWatched(watched){
   await loadAll();
   if (watched) await renumberQueue();
   toast(watched ? `Oznaczono ${state.selectedIds.length} pozycji jako obejrzane` : `Cofnięto status obejrzane dla ${state.selectedIds.length} pozycji`);
+  state.selectMode = false;
+  state.selectedIds = [];
+  renderTab();
+}
+
+function toggleBulkPriceEditor(){
+  state.bulkPriceEditing = !state.bulkPriceEditing;
+  renderTab();
+}
+
+// Ustawia tę samą cenę/walutę dla wszystkich zaznaczonych pozycji naraz. Celowo NIE odpala
+// tu automatycznego sprawdzenia wyceny rynkowej (jak przy zapisie pojedynczej pozycji,
+// patrz saveItem()) — zrobienie tego dla wielu pozycji naraz szybko zużyłoby dzienny limit
+// UPCitemdb/CEX; cykliczny cron w tle i tak dogoni resztę w ciągu tygodnia.
+async function bulkSetPurchasePrice(){
+  if (state.selectedIds.length === 0) return;
+  const price = parseFloat(document.getElementById('bulk-purchase-price').value);
+  if (isNaN(price)){ toast('Podaj cenę'); return; }
+  const currency = document.getElementById('bulk-purchase-currency').value || 'GBP';
+  const { error } = await sb.from('items').update({ purchase_price: price, purchase_currency: currency }).in('id', state.selectedIds);
+  if (error){ toast('Błąd zapisu: ' + error.message); return; }
+  await loadAll();
+  toast(`Ustawiono cenę zakupu dla ${state.selectedIds.length} pozycji`);
+  state.bulkPriceEditing = false;
   state.selectMode = false;
   state.selectedIds = [];
   renderTab();
