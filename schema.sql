@@ -343,3 +343,11 @@ alter table items add column if not exists purchase_country text;
 -- wymusza pustej ceny zakupu.
 -- ============================================
 alter table items add column if not exists is_gift boolean not null default false;
+
+-- ============================================
+-- MIGRACJA: id wydania Discogs (uruchom ręcznie w SQL Editorze, jeśli baza już istnieje) —
+-- zapamiętane przy skanowaniu kodu płyty (patrz lookupBarcodeGeneral() w index.html), żeby
+-- "Sprawdź cenę teraz"/cron mogły pytać Discogs o realną cenę rynkową (marketplace/stats)
+-- bez ponownego wyszukiwania wydania po kodzie kreskowym.
+-- ============================================
+alter table items add column if not exists discogs_release_id bigint;

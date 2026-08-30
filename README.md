@@ -34,9 +34,18 @@ Każda pozycja może mieć ręcznie wpisaną cenę zakupu oraz automatycznie spr
 rynkową z dwóch źródeł (przycisk "Sprawdź cenę teraz" na karcie pozycji, plus cykliczne
 odświeżanie w tle — patrz niżej):
 - **CEX** (webuy.com) — po kodzie kreskowym, bez klucza. Ceny w GBP.
+- **Discogs** (tylko muzyka) — oficjalne, darmowe API (`marketplace/stats`, bez klucza,
+  tylko nagłówek User-Agent), najniższa aktualna cena ofertowa + liczba ofert dla
+  konkretnego wydania. Release ID zapamiętywany przy skanowaniu kodu płyty
+  (`discogs_release_id` w bazie) — bez niego (np. pozycja dodana ręcznie, bez skanowania)
+  ten krok jest po prostu pomijany.
 - **eBay** — po tytule, ceny AKTYWNYCH ofert (nie faktycznie sprzedanych — historia
   sprzedanych wymaga specjalnej zgody eBay Partner Network, niedostępnej dla zwykłego
   konta deweloperskiego), więc to przybliżenie "za ile inni teraz sprzedają".
+
+Sprawdzone i odrzucone (wymagają płatnej subskrypcji albo nie mają żadnego publicznego
+API): PriceCharting (gry wideo), BookScouter/AbeBooks (książki), antykwariaty polskie i
+BoardGameGeek (brak API w ogóle — scraping byłby kruchy i prawnie ryzykowny).
 
 Żeby włączyć eBay, trzeba:
 1. Założyć darmowe konto na [developer.ebay.com](https://developer.ebay.com/) i w

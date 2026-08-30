@@ -2067,14 +2067,27 @@ async function lookupDiscogsByBarcode(code){
     const img = (detail && detail.images && detail.images[0] && (detail.images[0].uri150 || detail.images[0].uri)) || '';
     logStep('Discogs', 'znaleziono');
     toast('Znaleziono dane płyty (Discogs)');
-    return { type: 'music', title, creator, format, year, cover_url: img };
+    return { type: 'music', title, creator, format, year, cover_url: img, discogs_release_id: r.id };
   } catch(e){ logStep('Discogs', 'błąd sieci'); return null; }
+}
+
+// Discogs ma darmowe API z realną ceną rynkową (marketplace/stats — patrz worker.js), ale
+// tylko dla KONKRETNEGO wydania (release_id), więc zapamiętujemy je już przy skanowaniu —
+// nawet gdy to MusicBrainz (nie Discogs) znalazł resztę danych, żeby "Sprawdź cenę teraz"
+// mogło z niego skorzystać później bez ponownego wyszukiwania po kodzie kreskowym.
+async function attachDiscogsReleaseId(guess, code){
+  try {
+    const res = await fetch(`https://api.discogs.com/database/search?barcode=${encodeURIComponent(code)}&type=release`);
+    const data = await res.json();
+    const r = data.results && data.results[0];
+    if (r) guess.discogs_release_id = r.id;
+  } catch(e){ /* opcjonalne wzbogacenie — brak ID nie blokuje reszty wyniku */ }
 }
 
 async function lookupBarcodeGeneral(code){
   // 1. MusicBrainz po kodzie kreskowym (najlepsze pokrycie dla płyt CD/winyl)
   const mb = await lookupMusicBrainzByBarcode(code);
-  if (mb) return mb;
+  if (mb) { await attachDiscogsReleaseId(mb, code); return mb; }
   // 2. Discogs — jeśli MusicBrainz nie znalazł (niszowe/regionalne wydania)
   const discogs = await lookupDiscogsByBarcode(code);
   if (discogs) return discogs;
@@ -2750,6 +2763,7 @@ async function saveItem(allowDuplicate){
     purchase_currency: purchasePrice != null ? (document.getElementById('f-purchase-currency').value || 'GBP') : null,
     purchase_country: document.getElementById('f-purchase-country').value || null,
     is_gift: document.getElementById('f-is-gift').checked,
+    discogs_release_id: l.discogs_release_id || null,
     cover_url: l.cover_url || null,
     notes: (notesEl ? notesEl.value.trim() : '') || null,
     personal_notes: (personalNotesEl ? personalNotesEl.value.trim() : '') || null,
@@ -3578,15 +3592,21 @@ function marketPriceRowHtml(p){
   if (p.source === 'eBay'){
     return `<div class="record-row"><dt>eBay</dt><dd>${p.low}–${p.high} ${p.currency} (mediana ${p.median}, ${p.count} ofert)</dd></div>`;
   }
+  if (p.source === 'Discogs'){
+    return `<div class="record-row"><dt>Discogs</dt><dd>od ${p.lowestPrice} ${p.currency}${p.numForSale!=null?` (${p.numForSale} ofert)`:''}</dd></div>`;
+  }
   return '';
 }
 // Jedna "reprezentatywna" cena z ostatniej aktualizacji do porównania z ceną zakupu —
-// wolimy CEX (jedno konkretne "sellPrice"), bo eBay to zawsze widełki, więc bierzemy
+// wolimy CEX (jedno konkretne "sellPrice"), potem Discogs (specyficzne dla muzyki, też
+// jedna cena — najniższa oferta), a eBay na końcu, bo to zawsze widełki, więc bierzemy
 // z niego medianę jako najbliższy odpowiednik pojedynczej ceny.
 function bestMarketPrice(item){
   const prices = item.market_prices || [];
   const cex = prices.find(p => p.source === 'CEX' && p.sellPrice != null);
   if (cex) return { value: cex.sellPrice, currency: cex.currency };
+  const discogs = prices.find(p => p.source === 'Discogs' && p.lowestPrice != null);
+  if (discogs) return { value: discogs.lowestPrice, currency: discogs.currency };
   const ebay = prices.find(p => p.source === 'eBay' && p.median != null);
   if (ebay) return { value: ebay.median, currency: ebay.currency };
   return null;
@@ -3692,6 +3712,7 @@ async function checkMarketPriceNow(itemId){
   try {
     const params = new URLSearchParams();
     if (item.barcode) params.set('barcode', item.barcode);
+    if (item.discogs_release_id) params.set('discogs_release_id', item.discogs_release_id);
     const q = [item.title, item.creator].filter(Boolean).join(' ').trim();
     if (q) params.set('q', q);
     if (!params.toString()){ toast('Brak kodu kreskowego i tytułu — nie ma czego szukać'); return; }
@@ -3999,6 +4020,7 @@ function editItem(id){
     purchase_currency: item.purchase_price != null ? (item.purchase_currency || 'GBP') : 'GBP',
     purchase_country: item.purchase_country || '',
     is_gift: item.is_gift || false,
+    discogs_release_id: item.discogs_release_id || null,
     cover_url: item.cover_url || '',
     index_number: item.index_number || '',
     publisher: item.publisher || '',

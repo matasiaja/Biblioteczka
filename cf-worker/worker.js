@@ -164,6 +164,30 @@ async function ebayLookup(q, env) {
   }
 }
 
+// Discogs — oficjalne, darmowe API (bez klucza, tylko nagłówek User-Agent) z realnymi
+// danymi rynkowymi kolekcjonerskiego rynku płyt: najniższa aktualna cena ofertowa i liczba
+// ofert dla KONKRETNEGO wydania (release_id — ten sam, który zapisujemy przy skanowaniu
+// kodu płyty, patrz lookupBarcodeGeneral()/attachDiscogsReleaseId() w index.html).
+async function discogsLookup(releaseId) {
+  try {
+    const res = await fetch(`https://api.discogs.com/marketplace/stats/${encodeURIComponent(releaseId)}`, {
+      headers: { 'User-Agent': 'Biblioteczka/1.0' }
+    });
+    if (!res.ok) return { found: false, source: 'Discogs' };
+    const data = await res.json();
+    if (data.blocked_from_sale || !data.lowest_price) return { found: false, source: 'Discogs' };
+    return {
+      found: true,
+      source: 'Discogs',
+      lowestPrice: data.lowest_price.value,
+      currency: data.lowest_price.currency,
+      numForSale: data.num_for_sale ?? null
+    };
+  } catch (e) {
+    return { found: false, source: 'Discogs', error: String(e) };
+  }
+}
+
 async function handleCexPrice(url) {
   const barcode = url.searchParams.get('barcode');
   if (!barcode) return json({ error: 'missing barcode' }, 400);
@@ -176,14 +200,25 @@ async function handleEbayPrice(url, env) {
   return json(await ebayLookup(q, env));
 }
 
+async function handleDiscogsPrice(url) {
+  const releaseId = url.searchParams.get('release_id');
+  if (!releaseId) return json({ error: 'missing release_id' }, 400);
+  return json(await discogsLookup(releaseId));
+}
+
 // Punkt wejścia używany przez appkę (przycisk "Sprawdź cenę teraz") — jedno zapytanie
-// zamiast dwóch osobnych wywołań z klienta.
+// zamiast osobnych wywołań z klienta.
 async function handleMarketPrice(url, env) {
   const barcode = url.searchParams.get('barcode');
   const q = url.searchParams.get('q');
+  const discogsReleaseId = url.searchParams.get('discogs_release_id');
   const results = [];
   if (barcode) {
     const r = await cexLookup(barcode);
+    if (r.found) results.push(r);
+  }
+  if (discogsReleaseId) {
+    const r = await discogsLookup(discogsReleaseId);
     if (r.found) results.push(r);
   }
   if (q) {
@@ -210,7 +245,7 @@ async function refreshMarketPrices(env) {
     return;
   }
   const headers = { apikey: serviceKey, Authorization: `Bearer ${serviceKey}`, 'Content-Type': 'application/json' };
-  const selectUrl = `${supaUrl}/rest/v1/items?select=id,barcode,title,creator,type,status`
+  const selectUrl = `${supaUrl}/rest/v1/items?select=id,barcode,title,creator,type,status,discogs_release_id`
     + `&status=eq.owned&order=market_price_updated_at.asc.nullsfirst&limit=${PRICE_REFRESH_BATCH_SIZE}`;
   const itemsRes = await fetch(selectUrl, { headers });
   const items = await itemsRes.json();
@@ -222,6 +257,10 @@ async function refreshMarketPrices(env) {
     const results = [];
     if (item.barcode && ['movie', 'music', 'videogame'].includes(item.type)) {
       const r = await cexLookup(item.barcode);
+      if (r.found) results.push(r);
+    }
+    if (item.discogs_release_id) {
+      const r = await discogsLookup(item.discogs_release_id);
       if (r.found) results.push(r);
     }
     if (item.title) {
@@ -260,6 +299,7 @@ export default {
     if (url.pathname.endsWith('/ebay-price')) return handleEbayPrice(url, env);
     if (url.pathname.endsWith('/market-price')) return handleMarketPrice(url, env);
     if (url.pathname.endsWith('/fx-rates')) return handleFxRates(url);
+    if (url.pathname.endsWith('/discogs-price')) return handleDiscogsPrice(url);
     return json({ error: 'not found' }, 404);
   },
   // Cron trigger (patrz wrangler.toml [triggers]) — cykliczne odświeżanie wycen całej
