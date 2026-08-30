@@ -79,11 +79,11 @@
   .badge.warn{background:rgba(255,176,32,.15);color:var(--warn);}
   .badge.danger{background:rgba(255,77,77,.15);color:var(--danger);}
   .badge.accent{background:rgba(124,92,255,.15);color:var(--accent);}
-  /* Odznaka wtopiona w przycisk (np. "Dostępne" w przycisku "Pożycz komuś") — biały
-     półprzezroczysty chip zamiast koloru statusu, żeby było czytelne na dowolnym tle
-     przycisku, przyklejony blisko lewej krawędzi, tekst przycisku zostaje wyśrodkowany. */
+  /* Odznaka wtopiona w przycisk "Wypożycz" — te same kolory statusu co zwykły .badge
+     (tu: zielonomiętowy .badge.ok), tylko przyklejona blisko lewej krawędzi przycisku
+     zamiast stać osobno nad nim; tekst przycisku zostaje wyśrodkowany. */
   .btn-with-badge{position:relative;}
-  .btn-with-badge .btn-badge{position:absolute;left:14px;top:50%;transform:translateY(-50%);background:rgba(255,255,255,.22);color:#fff;}
+  .btn-with-badge .btn-badge{position:absolute;left:14px;top:50%;transform:translateY(-50%);}
   .item-row{display:flex;justify-content:space-between;align-items:center;padding:12px 0;border-bottom:1px solid var(--border);cursor:pointer;gap:10px;}
   .item-row:last-child{border-bottom:none;}
   .item-row .name{font-weight:500;font-size:14px;}
