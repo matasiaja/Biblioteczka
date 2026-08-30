@@ -82,7 +82,7 @@ async function handleTmdb(url, env) {
 // Ceny w GBP (sklep brytyjski) — celowo nie przeliczamy na inną walutę.
 async function cexLookup(barcode) {
   try {
-    const res = await fetch(`https://wss2.cex.uk.webuystore.com/v3/boxes/${encodeURIComponent(barcode)}/detail`);
+    const res = await fetch(`https://wss2.cex.uk.webuy.io/v3/boxes/${encodeURIComponent(barcode)}/detail`);
     if (!res.ok) return { found: false, source: 'CEX' };
     const data = await res.json();
     const box = data?.response?.data?.boxDetails?.[0];
