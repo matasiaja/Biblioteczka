@@ -3714,7 +3714,10 @@ function editItem(id){
     format: item.format || '',
     year: item.year || '',
     purchase_price: item.purchase_price != null ? item.purchase_price : '',
-    purchase_currency: item.purchase_currency || 'GBP',
+    // Bez ceny zawsze pokazujemy GBP jako domyślną, niezależnie od tego, co jest zapisane
+    // w purchase_currency — starsze zapisy mogły tam zostawić "przypadkową" walutę z czasów,
+    // gdy formularz zapisywał ją przy każdej edycji, nawet bez wpisanej ceny (patrz saveItem()).
+    purchase_currency: item.purchase_price != null ? (item.purchase_currency || 'GBP') : 'GBP',
     cover_url: item.cover_url || '',
     index_number: item.index_number || '',
     publisher: item.publisher || '',
