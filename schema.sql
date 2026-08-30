@@ -287,7 +287,7 @@ alter table items add constraint items_type_check
 -- w Workerze), do przyszłych wykresów trendu wartości.
 -- ============================================
 alter table items add column if not exists purchase_price numeric;
-alter table items add column if not exists purchase_currency text default 'PLN';
+alter table items add column if not exists purchase_currency text default 'GBP';
 alter table items add column if not exists market_prices jsonb;
 alter table items add column if not exists market_price_updated_at timestamptz;
 
@@ -303,3 +303,11 @@ alter table price_history enable row level security;
 drop policy if exists "auth_full_access" on price_history;
 create policy "auth_full_access" on price_history for all
   to authenticated using (true) with check (true);
+
+-- ============================================
+-- MIGRACJA: domyślna waluta ceny zakupu — GBP zamiast PLN (uruchom ręcznie w SQL
+-- Editorze, jeśli wcześniej uruchamiałeś/aś powyższą migrację z domyślnym PLN —
+-- dotyczy tylko nowo dodawanych pozycji bez podanej waluty, istniejące wiersze
+-- zostają bez zmian)
+-- ============================================
+alter table items alter column purchase_currency set default 'GBP';

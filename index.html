@@ -2203,7 +2203,7 @@ function renderAddForm(main){
       <div class="row">
         <input id="f-purchase-price" value="${escapeHtml(l.purchase_price != null ? l.purchase_price : '')}" placeholder="opcjonalnie" inputmode="decimal" oninput="syncDraftField('purchase_price', this.value)">
         <select id="f-purchase-currency" style="flex:0 0 90px;" onchange="syncDraftField('purchase_currency', this.value)">
-          ${['PLN','EUR','USD','GBP'].map(c=>`<option value="${c}" ${(l.purchase_currency||'PLN')===c?'selected':''}>${c}</option>`).join('')}
+          ${['GBP','PLN','EUR','USD'].map(c=>`<option value="${c}" ${(l.purchase_currency||'GBP')===c?'selected':''}>${c}</option>`).join('')}
         </select>
       </div>
       <label>Ocena</label>
@@ -2617,7 +2617,7 @@ async function saveItem(allowDuplicate){
     format: document.getElementById('f-format').value.trim() || null,
     year: parseInt(document.getElementById('f-year').value) || null,
     purchase_price: parseFloat(document.getElementById('f-purchase-price').value) || null,
-    purchase_currency: document.getElementById('f-purchase-currency').value || 'PLN',
+    purchase_currency: document.getElementById('f-purchase-currency').value || 'GBP',
     cover_url: l.cover_url || null,
     notes: (notesEl ? notesEl.value.trim() : '') || null,
     personal_notes: (personalNotesEl ? personalNotesEl.value.trim() : '') || null,
@@ -3357,7 +3357,7 @@ function marketPriceHtml(item){
   return `
     <div class="section-title" style="margin-top:4px;">Wycena</div>
     <dl class="record-fields">
-      ${item.purchase_price != null ? `<div class="record-row"><dt>Cena zakupu</dt><dd>${item.purchase_price} ${item.purchase_currency||'PLN'}</dd></div>` : ''}
+      ${item.purchase_price != null ? `<div class="record-row"><dt>Cena zakupu</dt><dd>${item.purchase_price} ${item.purchase_currency||'GBP'}</dd></div>` : ''}
       ${rows || `<div class="record-row"><dt>Rynek</dt><dd class="meta">Jeszcze nie sprawdzano</dd></div>`}
     </dl>
     <div class="meta" style="margin-bottom:10px;">${item.market_price_updated_at ? 'Ostatnia aktualizacja: ' + new Date(item.market_price_updated_at).toLocaleDateString('pl-PL') : 'Ceny CEX/eBay same się doszukają co jakiś czas w tle — możesz też sprawdzić od razu.'}</div>
@@ -3655,7 +3655,7 @@ function editItem(id){
     format: item.format || '',
     year: item.year || '',
     purchase_price: item.purchase_price != null ? item.purchase_price : '',
-    purchase_currency: item.purchase_currency || 'PLN',
+    purchase_currency: item.purchase_currency || 'GBP',
     cover_url: item.cover_url || '',
     index_number: item.index_number || '',
     publisher: item.publisher || '',
