@@ -2933,6 +2933,7 @@ function renderQueueList(main){
   const queued = state.items
     .filter(i => i.queue_position != null)
     .sort((a,b) => a.queue_position - b.queue_position);
+  state.visibleIds = queued.map(i=>i.id);
   main.innerHTML = `
     ${state.cameFromStats ? `<button class="link" style="margin-bottom:12px;" onclick="backToStats()">&larr; Wróć do statystyk</button>` : ''}
     <div class="row" style="margin-bottom:12px;">
@@ -3319,6 +3320,7 @@ function renderSearch(main){
     (!yearQ || String(i.year||'') === yearQ) &&
     (!formatQ || i.format === formatQ)
   ) : []);
+  state.visibleIds = results.map(i=>i.id);
   main.innerHTML = `
     <div style="position:relative;margin-bottom:10px;">
       <input id="search-q" value="${escapeHtml(state.searchQuery||'')}" placeholder="Szukaj: tytuł, autor, wydawnictwo, kod…" oninput="onSearchInput()" style="margin-bottom:0;${state.searchQuery ? 'padding-right:44px;' : ''}">
@@ -3516,8 +3518,25 @@ function openItem(id){
   // zamiast nad nimi — .item-detail-card zmienia się w dwie kolumny wyłącznie przez CSS
   // (@media pointer:fine), markup jest ten sam dla telefonu i komputera.
   const coverSize = isDesktopDevice() ? 260 : 100;
+  // Poprzednia/Następna — przeglądanie sąsiednich pozycji z tej samej listy (kolekcja/lista
+  // życzeń, kolejka albo wyniki wyszukiwania — cokolwiek ostatnio wyrenderowało state.visibleIds)
+  // bez wracania do widoku listy. Jeśli id nie ma w tej tablicy (np. otwarto z wypożyczeń albo
+  // wprost z linku), nawigacja się po prostu nie pokazuje.
+  const navIds = state.visibleIds || [];
+  const navIdx = navIds.indexOf(id);
+  const hasNav = navIdx !== -1 && navIds.length > 1;
+  const prevId = hasNav && navIdx > 0 ? navIds[navIdx - 1] : null;
+  const nextId = hasNav && navIdx < navIds.length - 1 ? navIds[navIdx + 1] : null;
   main.innerHTML = `
-    <button class="link" onclick="state.openItemId=null;renderTab()">&larr; ${state.tab==='list' ? t('back_to_list') : t('back')}</button>
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;">
+      <button class="link" onclick="state.openItemId=null;renderTab()">&larr; ${state.tab==='list' ? t('back_to_list') : t('back')}</button>
+      ${hasNav ? `
+        <div style="display:flex;gap:8px;">
+          <button class="btn small secondary" style="flex:0 0 auto;" ${prevId?`onclick="openItem('${prevId}')"`:'disabled'}>◀ Poprzednia</button>
+          <button class="btn small secondary" style="flex:0 0 auto;" ${nextId?`onclick="openItem('${nextId}')"`:'disabled'}>Następna ▶</button>
+        </div>
+      ` : ''}
+    </div>
     <div class="card item-detail-card" style="margin-top:12px;">
       ${item.cover_url ? `
         <div class="item-detail-cover">
