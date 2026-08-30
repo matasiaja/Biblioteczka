@@ -581,6 +581,23 @@ document.addEventListener('keydown', function(e){
   setTab('scan');
 });
 
+// Strzałki lewo/prawo na karcie pozycji = Poprzednia/Następna (patrz przyciski w openItem()) —
+// pomijamy pola tekstowe, bo tam strzałki muszą poruszać kursorem jak zwykle.
+document.addEventListener('keydown', function(e){
+  if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+  if (!state.openItemId) return;
+  const tag = document.activeElement ? document.activeElement.tagName.toLowerCase() : '';
+  const editable = document.activeElement && document.activeElement.isContentEditable;
+  if (tag === 'input' || tag === 'textarea' || tag === 'select' || editable) return;
+  const navIds = state.visibleIds || [];
+  const idx = navIds.indexOf(state.openItemId);
+  if (idx === -1) return;
+  const targetIdx = idx + (e.key === 'ArrowLeft' ? -1 : 1);
+  if (targetIdx < 0 || targetIdx >= navIds.length) return;
+  e.preventDefault();
+  openItem(navIds[targetIdx]);
+});
+
 window.addEventListener('popstate', function(){
   clearTimeout(checkModeTimer);
   if (!session) return;
