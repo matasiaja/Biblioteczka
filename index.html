@@ -475,6 +475,7 @@ let state = {
   selectMode: false,
   selectedIds: [],
   bulkPriceEditing: false,
+  bulkPriceCheckProgress: null, // { checked, total } podczas checkAllMarketPricesNow(), inaczej null
   loanTypeFilter: 'all',
   loanSelectMode: false,
   selectedLoanIds: [],
@@ -538,6 +539,17 @@ function copyTitleToOriginal(){
   const titleVal = document.getElementById('f-title').value;
   document.getElementById('f-original-title').value = titleVal;
   syncDraftField('original_title', titleVal);
+}
+
+// Zaznaczenie "To był prezent" czyści cenę zakupu — nie płaciłeś za to, więc "cena zakupu"
+// nie ma sensu. Wycena rynkowa (CEX/eBay/Discogs) zostaje nietknięta i dalej działa
+// normalnie — is_gift nigdzie nie wpływa na checkMarketPriceNow()/marketPriceHtml().
+function onGiftToggle(checked){
+  syncDraftField('is_gift', checked);
+  if (checked){
+    document.getElementById('f-purchase-price').value = '';
+    syncDraftField('purchase_price', '');
+  }
 }
 
 // ---------------- NAWIGACJA: fizyczny/systemowy przycisk "Wstecz" ----------------
@@ -1475,6 +1487,7 @@ function renderScan(main){
       <input type="checkbox" style="width:18px;height:18px;margin:0;" ${state.batchScanMode?'checked':''} onchange="toggleBatchScanMode(this.checked)">
       <span class="meta">${t('continuous_scan')}</span>
     </label>
+    <button class="btn secondary" style="margin-top:16px;" onclick="checkAllMarketPricesNow()" ${state.bulkPriceCheckProgress?'disabled':''}>${state.bulkPriceCheckProgress ? `Sprawdzanie… (${state.bulkPriceCheckProgress.checked}/${state.bulkPriceCheckProgress.total})` : '📈 Sprawdź wszystkie aktualne ceny teraz'}</button>
   `;
   bindHwScanInput('hw-scan-add', onBarcode);
 }
@@ -2340,7 +2353,7 @@ function renderAddForm(main){
         ${PURCHASE_COUNTRIES.map(c=>`<option value="${escapeHtml(c)}" ${l.purchase_country===c?'selected':''}>${escapeHtml(c)}</option>`).join('')}
       </select>
       <label style="display:flex;align-items:center;gap:8px;margin-bottom:14px;cursor:pointer;">
-        <input type="checkbox" id="f-is-gift" style="width:18px;height:18px;margin:0;" ${l.is_gift?'checked':''} onchange="syncDraftField('is_gift', this.checked)">
+        <input type="checkbox" id="f-is-gift" style="width:18px;height:18px;margin:0;" ${l.is_gift?'checked':''} onchange="onGiftToggle(this.checked)">
         <span>🎁 To był prezent <span class="meta" style="font-weight:400;">(nie wyklucza sprawdzania wyceny rynkowej)</span></span>
       </label>
       <label>Ocena</label>
@@ -3704,33 +3717,76 @@ function marketPriceButtonHtml(item){
   return `<button class="btn secondary btn-with-price" style="margin-bottom:10px;" onclick="checkMarketPriceNow('${item.id}')" id="market-price-btn-${item.id}">${leftHtml}<span>Sprawdź cenę teraz</span>${rightHtml}</button>`;
 }
 
+// Rdzeń bez UI — pyta market-price, zapisuje w items + price_history. Zwraca tablicę
+// wyników (pustą, jeśli nic nie znaleziono) albo null, gdy nie ma czego szukać (brak
+// kodu/tytułu). Rzuca przy błędzie sieci/zapisu — wywołujący decyduje, jak to obsłużyć.
+async function fetchAndSaveMarketPrice(item){
+  const params = new URLSearchParams();
+  if (item.barcode) params.set('barcode', item.barcode);
+  if (item.discogs_release_id) params.set('discogs_release_id', item.discogs_release_id);
+  const q = [item.title, item.creator].filter(Boolean).join(' ').trim();
+  if (q) params.set('q', q);
+  if (!params.toString()) return null;
+  const res = await fetch(`${FUNCTIONS_BASE}/market-price?${params.toString()}`);
+  const data = await res.json();
+  const market_prices = data.results || [];
+  const now = new Date().toISOString();
+  const { error } = await sb.from('items').update({ market_prices, market_price_updated_at: now }).eq('id', item.id);
+  if (error) throw new Error(error.message);
+  if (market_prices.length){
+    await sb.from('price_history').insert({ item_id: item.id, market_prices, checked_at: now });
+  }
+  return market_prices;
+}
+
 async function checkMarketPriceNow(itemId){
   const item = state.items.find(i=>i.id===itemId);
   if (!item) return;
   const btn = document.getElementById(`market-price-btn-${itemId}`);
   if (btn){ btn.disabled = true; btn.textContent = 'Sprawdzam…'; }
   try {
-    const params = new URLSearchParams();
-    if (item.barcode) params.set('barcode', item.barcode);
-    if (item.discogs_release_id) params.set('discogs_release_id', item.discogs_release_id);
-    const q = [item.title, item.creator].filter(Boolean).join(' ').trim();
-    if (q) params.set('q', q);
-    if (!params.toString()){ toast('Brak kodu kreskowego i tytułu — nie ma czego szukać'); return; }
-    const res = await fetch(`${FUNCTIONS_BASE}/market-price?${params.toString()}`);
-    const data = await res.json();
-    const market_prices = data.results || [];
-    const now = new Date().toISOString();
-    const { error } = await sb.from('items').update({ market_prices, market_price_updated_at: now }).eq('id', itemId);
-    if (error){ toast('Błąd zapisu wyceny: ' + error.message); return; }
-    if (market_prices.length){
-      await sb.from('price_history').insert({ item_id: itemId, market_prices, checked_at: now });
-    }
+    const market_prices = await fetchAndSaveMarketPrice(item);
+    if (market_prices === null){ toast('Brak kodu kreskowego i tytułu — nie ma czego szukać'); return; }
     await loadAll();
     toast(market_prices.length ? 'Zaktualizowano wycenę' : 'Nie znaleziono wyceny dla tej pozycji w CEX/eBay');
     if (state.openItemId === itemId) openItem(itemId);
   } catch(e){
     toast('Błąd sprawdzania ceny: ' + e.message);
   }
+}
+
+// "Sprawdź wszystkie aktualne ceny teraz" (widok Dodaj) — hurtowe odświeżenie całej
+// kolekcji od ręki, zamiast czekać na cotygodniowy cron w Workerze. Sekwencyjnie, z małym
+// odstępem między pozycjami (m.in. limit Discogs ~25 zapytań/min bez klucza). Od razu
+// przenosi do Ustawień i aktualizuje state.items lokalnie po każdej pozycji (bez pełnego
+// loadAll() za każdym razem — przy większej kolekcji byłoby to O(n²) zapytań do Supabase),
+// więc sekcja "Wycena portfela" pokazuje wzrosty/spadki na żywo w trakcie skanowania.
+async function checkAllMarketPricesNow(){
+  if (state.bulkPriceCheckProgress){ toast('Sprawdzanie już trwa…'); return; }
+  const owned = state.items.filter(i => (i.status||'owned') === 'owned');
+  if (!owned.length){ toast('Kolekcja jest pusta'); return; }
+  await setTab('settings');
+  state.bulkPriceCheckProgress = { checked: 0, total: owned.length };
+  renderTab();
+  let found = 0;
+  for (const item of owned){
+    try {
+      const market_prices = await fetchAndSaveMarketPrice(item);
+      if (market_prices){
+        const idx = state.items.findIndex(i=>i.id===item.id);
+        if (idx !== -1) state.items[idx] = { ...state.items[idx], market_prices, market_price_updated_at: new Date().toISOString() };
+        if (market_prices.length) found++;
+      }
+    } catch(e){ /* pojedynczy błąd nie przerywa reszty paczki */ }
+    state.bulkPriceCheckProgress.checked++;
+    if (state.tab === 'settings') renderTab();
+    await new Promise(r => setTimeout(r, 500));
+  }
+  state.bulkPriceCheckProgress = null;
+  await loadAll(); // pełna synchronizacja na koniec, na wszelki wypadek
+  const perf = computePortfolioPerformance();
+  toast(`Sprawdzono ${owned.length} pozycji (${found} z wynikiem) — 🟢 ${perf.gainers.length} w górę, 🔴 ${perf.losers.length} w dół`);
+  if (state.tab === 'settings') renderTab();
 }
 
 function openItem(id){
@@ -4393,6 +4449,11 @@ function renderSettings(main){
     ${renderMfaCard()}
     <div class="card">
       <div class="section-title">Statystyki</div>
+      ${state.bulkPriceCheckProgress ? `
+        <div class="badge accent" style="display:block;margin-bottom:12px;padding:8px 12px;">
+          🔄 Sprawdzanie cen: ${state.bulkPriceCheckProgress.checked} / ${state.bulkPriceCheckProgress.total} pozycji…
+        </div>
+      ` : ''}
       <div class="stat-group-label">Kolekcja</div>
       <div class="stat-grid">
         <div class="stat-tile" onclick="goToStat('all')"><div class="stat-num">${owned.length}</div><div class="stat-label">Razem</div></div>
