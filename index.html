@@ -3650,8 +3650,10 @@ function computePortfolioPerformance(){
     totalMarketGBP += marketGBP;
   });
   rows.sort((a,b) => b.changePct - a.changePct);
-  const gainers = rows.filter(r => r.changePct > 0).slice(0, 10);
-  const losers = rows.filter(r => r.changePct < 0).slice(-10).reverse();
+  // Pełne listy — bez ucinania do top 10, żeby "Pokaż więcej" w Statystykach
+  // (patrz collapsibleRankingHtml()) mogło faktycznie pokazać WSZYSTKIE wzrosty/spadki.
+  const gainers = rows.filter(r => r.changePct > 0);
+  const losers = rows.filter(r => r.changePct < 0).reverse();
   return { rows, gainers, losers, totalPurchaseGBP, totalMarketGBP };
 }
 
@@ -3673,6 +3675,30 @@ function perfRowHtml(r){
     </div>
     <div style="font-weight:700;white-space:nowrap;color:${color};">${up?'▲':'▼'} ${up?'+':''}${r.changePct.toFixed(1)}%</div>
   </div>`;
+}
+
+// Ta sama zasada zwiń/rozwiń co przy opisach pozycji (patrz clampedTextHtml()/toggleClamp())
+// — pokazuje od razu tylko PERF_RANKING_VISIBLE_COUNT wierszy, reszta chowa się pod
+// "Pokaż więcej (N) ▾" i po kliknięciu odsłania WSZYSTKIE, nie kolejną porcję.
+const PERF_RANKING_VISIBLE_COUNT = 5;
+function collapsibleRankingHtml(rows, id){
+  const visible = rows.slice(0, PERF_RANKING_VISIBLE_COUNT);
+  const rest = rows.slice(PERF_RANKING_VISIBLE_COUNT);
+  return `
+    <div class="card" style="padding:4px 12px;margin-bottom:${rest.length ? 4 : 12}px;">
+      ${visible.map(perfRowHtml).join('')}
+      <div id="${id}" style="display:none;">${rest.map(perfRowHtml).join('')}</div>
+    </div>
+    ${rest.length ? `<button type="button" class="link" data-more-label="Pokaż więcej (${rest.length}) ▾" style="margin:2px 0 14px;" onclick="toggleInlineList('${id}', this)">Pokaż więcej (${rest.length}) ▾</button>` : ''}
+  `;
+}
+
+function toggleInlineList(id, btn){
+  const el = document.getElementById(id);
+  if (!el) return;
+  const willShow = el.style.display === 'none';
+  el.style.display = willShow ? '' : 'none';
+  if (btn) btn.textContent = willShow ? 'Zwiń ▴' : btn.dataset.moreLabel;
 }
 
 function marketPriceHtml(item){
@@ -4500,15 +4526,11 @@ function renderSettings(main){
         </div>
         ${perf.gainers.length ? `
           <div class="stat-group-label">🟢 Największe wzrosty</div>
-          <div class="card" style="padding:4px 12px;margin-bottom:12px;">
-            ${perf.gainers.map(perfRowHtml).join('')}
-          </div>
+          ${collapsibleRankingHtml(perf.gainers, 'perf-gainers-extra')}
         ` : ''}
         ${perf.losers.length ? `
           <div class="stat-group-label">🔴 Największe spadki</div>
-          <div class="card" style="padding:4px 12px;margin-bottom:12px;">
-            ${perf.losers.map(perfRowHtml).join('')}
-          </div>
+          ${collapsibleRankingHtml(perf.losers, 'perf-losers-extra')}
         ` : ''}
       ` : ''}
       <div class="stat-group-label">Wypożyczenia</div>
