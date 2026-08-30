@@ -2615,6 +2615,11 @@ async function saveItem(allowDuplicate){
   const publisherEl = document.getElementById('f-publisher');
   const notesEl = document.getElementById('f-notes');
   const personalNotesEl = document.getElementById('f-personal-notes');
+  // Zapisujemy walutę tylko razem z faktyczną ceną — inaczej pusty formularz (bez wpisanej
+  // ceny) i tak nadpisywałby purchase_currency przy każdej edycji dowolnego innego pola,
+  // co potem fałszywie "zapamiętywało" ostatnio wybraną walutę jako domyślną przy kolejnym
+  // otwarciu formularza tej pozycji, mimo że ceny nigdy nie wpisano.
+  const purchasePrice = parseFloat(document.getElementById('f-purchase-price').value) || null;
   const payload = {
     barcode: (barcodeEl ? barcodeEl.value.trim() : l.barcode) || null,
     index_number: (indexEl ? indexEl.value.trim() : '') || null,
@@ -2624,8 +2629,8 @@ async function saveItem(allowDuplicate){
     creator: document.getElementById('f-creator').value.trim() || null,
     format: document.getElementById('f-format').value.trim() || null,
     year: parseInt(document.getElementById('f-year').value) || null,
-    purchase_price: parseFloat(document.getElementById('f-purchase-price').value) || null,
-    purchase_currency: document.getElementById('f-purchase-currency').value || 'GBP',
+    purchase_price: purchasePrice,
+    purchase_currency: purchasePrice != null ? (document.getElementById('f-purchase-currency').value || 'GBP') : null,
     cover_url: l.cover_url || null,
     notes: (notesEl ? notesEl.value.trim() : '') || null,
     personal_notes: (personalNotesEl ? personalNotesEl.value.trim() : '') || null,

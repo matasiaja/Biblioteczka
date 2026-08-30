@@ -319,3 +319,12 @@ alter table items alter column purchase_currency set default 'GBP';
 -- jest bezpieczna do wielokrotnego uruchomienia)
 -- ============================================
 update items set purchase_currency = 'GBP' where purchase_currency = 'PLN';
+
+-- ============================================
+-- MIGRACJA: wyczyszczenie "przypadkowej" waluty przy pozycjach bez ceny (uruchom ręcznie
+-- w SQL Editorze) — do tej pory formularz zapisywał purchase_currency przy KAŻDEJ edycji
+-- pozycji, nawet gdy pole ceny zostało puste, więc appka potem fałszywie "pamiętała" ostatnio
+-- wybraną walutę jako domyślną, mimo że ceny nigdy nie wpisano. index.html już tego nie robi
+-- (patrz saveItem()) — ta migracja czyści to, co już zostało tak zapisane.
+-- ============================================
+update items set purchase_currency = null where purchase_price is null and purchase_currency is not null;
