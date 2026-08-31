@@ -83,5 +83,29 @@ EBC aktualizowane w dni robocze) — proxy `/fx-rates` w `worker.js`, bez dodatk
 konfiguracji. Pozycje z ceną w walucie, dla której Frankfurter nie ma kursu, są pomijane
 w sumie (i policzone osobno jako "pominięte" w opisie statystyki).
 
+## Cotygodniowy raport mailowy
+Co poniedziałek o 8:00 UTC (`sendWeeklyReportEmail()` w `worker.js`, drugi cron obok
+codziennego odświeżania cen) leci e-mail z pełną listą wzrostów/spadków (cena zakupu vs
+ostatnia sprawdzona wycena rynkowa, ta sama logika co "Wycena portfela" w Ustawieniach) —
+przez [Resend](https://resend.com) (darmowe, bez własnej domeny, wysyłka z
+`onboarding@resend.dev`).
+
+Żeby to włączyć:
+1. Załóż darmowe konto na [resend.com](https://resend.com) i wygeneruj API key
+   (Dashboard → API Keys).
+2. Ustaw sekret w Workerze:
+   ```
+   cd cf-worker
+   npx wrangler secret put RESEND_API_KEY
+   npx wrangler deploy
+   ```
+3. (Opcjonalnie) `REPORT_EMAIL_TO` — adres docelowy — jest już ustawiony jako zwykła
+   zmienna w `wrangler.toml`; zmień go tam, jeśli trzeba, i zrób `wrangler deploy`
+   ponownie. To samo dla `RESEND_FROM`, jeśli kiedyś zweryfikujesz własną domenę
+   w Resend i zechcesz wysyłać z niej zamiast `onboarding@resend.dev`.
+
+Żeby przetestować bez czekania do poniedziałku, wejdź w przeglądarce (albo `curl`) w:
+`https://biblioteczka-functions.<Twoja-subdomena>.workers.dev/send-report-now`.
+
 ## Rozwój
 To wersja startowa (MVP) — kolejne funkcje (np. lepsze wyszukiwanie filmów/muzyki po kodzie kreskowym, zdjęcia okładek, eksport, przypomnienia o zwrotach) dojdą w miarę rozwoju projektu.

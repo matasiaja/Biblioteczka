@@ -284,6 +284,132 @@ async function refreshMarketPrices(env) {
   }
 }
 
+// ---------------- Cotygodniowy raport mailowy (cron: poniedziałki 8:00 UTC) ----------------
+// Ta sama logika co bestMarketPrice()/computePortfolioPerformance() w index.html (Ustawienia
+// → Statystyki → "Wycena portfela"), tylko po stronie Workera — żeby raport pokazywał
+// dokładnie to, co user widzi w appce, bez utrzymywania dwóch osobnych definicji "co jest
+// najlepszą ceną" w dwóch miejscach naraz nie da się uniknąć (brak współdzielonego modułu
+// między przeglądarką a Workerem), więc trzymaj te dwie kopie zsynchronizowane przy zmianach.
+function bestMarketPriceServer(item) {
+  const prices = item.market_prices || [];
+  const cex = prices.find(p => p.source === 'CEX' && p.sellPrice != null);
+  if (cex) return { value: cex.sellPrice, currency: cex.currency };
+  const discogs = prices.find(p => p.source === 'Discogs' && p.lowestPrice != null);
+  if (discogs) return { value: discogs.lowestPrice, currency: discogs.currency };
+  const ebay = prices.find(p => p.source === 'eBay' && p.median != null);
+  if (ebay) return { value: ebay.median, currency: ebay.currency };
+  return null;
+}
+
+function convertToGBPServer(amount, currency, rates) {
+  if (amount == null || !currency) return null;
+  if (currency === 'GBP') return amount;
+  const rate = rates && rates[currency];
+  if (!rate) return null;
+  return amount / rate;
+}
+
+function computePortfolioPerformanceServer(items, rates) {
+  const rows = [];
+  let totalPurchaseGBP = 0, totalMarketGBP = 0;
+  for (const i of items) {
+    if (i.purchase_price == null) continue;
+    const purchaseGBP = convertToGBPServer(i.purchase_price, i.purchase_currency, rates);
+    if (purchaseGBP == null) continue;
+    const best = bestMarketPriceServer(i);
+    if (!best) continue;
+    const marketGBP = convertToGBPServer(best.value, best.currency, rates);
+    if (marketGBP == null) continue;
+    const changeAbs = marketGBP - purchaseGBP;
+    const changePct = purchaseGBP > 0 ? (changeAbs / purchaseGBP) * 100 : 0;
+    rows.push({ title: i.title, purchaseGBP, marketGBP, changeAbs, changePct });
+    totalPurchaseGBP += purchaseGBP;
+    totalMarketGBP += marketGBP;
+  }
+  rows.sort((a, b) => b.changePct - a.changePct);
+  const gainers = rows.filter(r => r.changePct > 0);
+  const losers = rows.filter(r => r.changePct < 0).reverse();
+  return { rows, gainers, losers, totalPurchaseGBP, totalMarketGBP };
+}
+
+function escapeHtmlServer(s) {
+  return String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
+function perfRowHtmlServer(r) {
+  const up = r.changePct >= 0;
+  const color = up ? '#3DDC84' : '#FF4D4D';
+  return `<tr>
+    <td style="padding:6px 10px;border-bottom:1px solid #333844;">${escapeHtmlServer(r.title)}</td>
+    <td style="padding:6px 10px;border-bottom:1px solid #333844;white-space:nowrap;">£${r.purchaseGBP.toFixed(2)} → £${r.marketGBP.toFixed(2)}</td>
+    <td style="padding:6px 10px;border-bottom:1px solid #333844;white-space:nowrap;font-weight:700;color:${color};">${up ? '▲' : '▼'} ${up ? '+' : ''}${r.changePct.toFixed(1)}%</td>
+  </tr>`;
+}
+
+async function sendWeeklyReportEmail(env) {
+  const supaUrl = env.SUPABASE_URL;
+  const serviceKey = env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!supaUrl || !serviceKey) {
+    console.log('SUPABASE_URL/SUPABASE_SERVICE_ROLE_KEY not configured — pomijam raport mailowy');
+    return;
+  }
+  if (!env.RESEND_API_KEY || !env.REPORT_EMAIL_TO) {
+    console.log('RESEND_API_KEY/REPORT_EMAIL_TO not configured — pomijam raport mailowy');
+    return;
+  }
+  const headers = { apikey: serviceKey, Authorization: `Bearer ${serviceKey}` };
+  const itemsRes = await fetch(
+    `${supaUrl}/rest/v1/items?select=title,purchase_price,purchase_currency,market_prices&status=eq.owned`,
+    { headers }
+  );
+  const items = await itemsRes.json();
+  if (!Array.isArray(items)) {
+    console.log('nieoczekiwana odpowiedź Supabase przy raporcie mailowym', items);
+    return;
+  }
+  const fxRes = await fetch('https://api.frankfurter.dev/v1/latest?base=GBP');
+  const fxData = await fxRes.json();
+  const rates = fxData.rates || {};
+
+  const perf = computePortfolioPerformanceServer(items, rates);
+  const changeAbs = perf.totalMarketGBP - perf.totalPurchaseGBP;
+  const changePct = perf.totalPurchaseGBP > 0 ? (changeAbs / perf.totalPurchaseGBP) * 100 : 0;
+  const changeColor = changeAbs >= 0 ? '#3DDC84' : '#FF4D4D';
+
+  const html = `
+    <div style="font-family:sans-serif;max-width:640px;margin:0 auto;color:#1A1D23;">
+      <h2 style="margin-bottom:4px;">📈 Biblioteczka — cotygodniowy raport wyceny</h2>
+      <p style="color:#6B7280;margin-top:0;">${perf.rows.length} pozycji z ceną zakupu i sprawdzoną wyceną rynkową.</p>
+      <div style="background:#F3F4F7;border-radius:12px;padding:16px;margin-bottom:20px;">
+        <table style="width:100%;"><tr>
+          <td><div style="color:#6B7280;font-size:12px;">Zainwestowano</div><div style="font-size:20px;font-weight:700;">£${perf.totalPurchaseGBP.toFixed(2)}</div></td>
+          <td style="text-align:right;"><div style="color:#6B7280;font-size:12px;">Aktualna wycena</div><div style="font-size:20px;font-weight:700;">£${perf.totalMarketGBP.toFixed(2)}</div></td>
+        </tr></table>
+        <div style="margin-top:10px;font-size:17px;font-weight:700;color:${changeColor};">${changeAbs >= 0 ? '▲' : '▼'} £${Math.abs(changeAbs).toFixed(2)} (${changeAbs >= 0 ? '+' : ''}${changePct.toFixed(1)}%)</div>
+      </div>
+      <h3 style="color:#16875A;">🟢 Wzrosty (${perf.gainers.length})</h3>
+      ${perf.gainers.length ? `<table style="width:100%;border-collapse:collapse;font-size:14px;">${perf.gainers.map(perfRowHtmlServer).join('')}</table>` : '<p style="color:#6B7280;">Brak.</p>'}
+      <h3 style="color:#D6303F;margin-top:24px;">🔴 Spadki (${perf.losers.length})</h3>
+      ${perf.losers.length ? `<table style="width:100%;border-collapse:collapse;font-size:14px;">${perf.losers.map(perfRowHtmlServer).join('')}</table>` : '<p style="color:#6B7280;">Brak.</p>'}
+      <p style="color:#9AA0AC;font-size:12px;margin-top:24px;">Wygenerowano automatycznie przez Biblioteczkę. Ceny liczone wg CEX/Discogs/eBay, przeliczone na GBP wg dzisiejszego kursu (Frankfurter/EBC).</p>
+    </div>
+  `;
+
+  const res = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${env.RESEND_API_KEY}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      from: env.RESEND_FROM || 'Biblioteczka <onboarding@resend.dev>',
+      to: env.REPORT_EMAIL_TO,
+      subject: `📈 Biblioteczka: ${perf.gainers.length} w górę, ${perf.losers.length} w dół — raport tygodniowy`,
+      html
+    })
+  });
+  if (!res.ok) {
+    console.log('Błąd wysyłki raportu mailowego przez Resend', res.status, await res.text());
+  }
+}
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
@@ -300,11 +426,23 @@ export default {
     if (url.pathname.endsWith('/market-price')) return handleMarketPrice(url, env);
     if (url.pathname.endsWith('/fx-rates')) return handleFxRates(url);
     if (url.pathname.endsWith('/discogs-price')) return handleDiscogsPrice(url);
+    // Ręczne wywołanie raportu tygodniowego — do testowania bez czekania do poniedziałku.
+    // Wysyła zawsze na REPORT_EMAIL_TO (Twój własny e-mail), więc brak dodatkowej
+    // autoryzacji jest tu niegroźny — najwyżej ktoś sprawi, że dostaniesz maila.
+    if (url.pathname.endsWith('/send-report-now')) {
+      await sendWeeklyReportEmail(env);
+      return json({ ok: true });
+    }
     return json({ error: 'not found' }, 404);
   },
-  // Cron trigger (patrz wrangler.toml [triggers]) — cykliczne odświeżanie wycen całej
-  // kolekcji w tle, kawałek po kawałku (PRICE_REFRESH_BATCH_SIZE dziennie).
+  // Dwa harmonogramy (patrz wrangler.toml [triggers]), rozróżniane po event.cron:
+  // - "0 3 * * *"  — cykliczne odświeżanie wycen całej kolekcji, kawałek po kawałku
+  // - "0 8 * * 1"  — cotygodniowy raport mailowy z wynikiem (poniedziałki rano)
   async scheduled(event, env, ctx) {
-    ctx.waitUntil(refreshMarketPrices(env));
+    if (event.cron === '0 8 * * 1') {
+      ctx.waitUntil(sendWeeklyReportEmail(env));
+    } else {
+      ctx.waitUntil(refreshMarketPrices(env));
+    }
   }
 };

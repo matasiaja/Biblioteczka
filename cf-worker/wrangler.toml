@@ -7,8 +7,12 @@ compatibility_date = "2026-01-01"
 # SUPABASE_SERVICE_ROLE_KEY (patrz README.md, ustawiany przez `wrangler secret put`).
 [vars]
 SUPABASE_URL = "https://alxwzewdsqhaszzcpkga.supabase.co"
+# Adres, na który leci cotygodniowy raport wzrostów/spadków (patrz sendWeeklyReportEmail()
+# w worker.js) — nie jest tajny (to Twój własny e-mail), stąd zwykła zmienna.
+REPORT_EMAIL_TO = "mathyus@gmail.com"
 
-# Cykliczne odświeżanie wycen rynkowych (patrz refreshMarketPrices() w worker.js) —
-# codziennie o 3:00 UTC, paczkami po PRICE_REFRESH_BATCH_SIZE pozycji.
+# Dwa harmonogramy rozróżniane w scheduled() po event.cron:
+# - codziennie 3:00 UTC — stopniowe odświeżanie wycen (refreshMarketPrices())
+# - poniedziałki 8:00 UTC — cotygodniowy raport mailowy (sendWeeklyReportEmail())
 [triggers]
-crons = ["0 3 * * *"]
+crons = ["0 3 * * *", "0 8 * * 1"]
