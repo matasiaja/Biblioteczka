@@ -9,7 +9,7 @@ compatibility_date = "2026-01-01"
 SUPABASE_URL = "https://alxwzewdsqhaszzcpkga.supabase.co"
 # Adres, na który leci cotygodniowy raport wzrostów/spadków (patrz sendWeeklyReportEmail()
 # w worker.js) — nie jest tajny (to Twój własny e-mail), stąd zwykła zmienna.
-REPORT_EMAIL_TO = "mathyus@gmail.com"
+REPORT_EMAIL_TO = "info@mattsmok.art"
 
 # Dwa harmonogramy rozróżniane w scheduled() po event.cron:
 # - codziennie 3:00 UTC — stopniowe odświeżanie wycen (refreshMarketPrices())
