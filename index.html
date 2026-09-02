@@ -1201,7 +1201,6 @@ function goToCollectionHome(){
 
 async function setTab(tab){
   clearTimeout(checkModeTimer);
-  clearTimeout(scanFeedbackTimer);
   state.scanReturnFeedback = false;
   await stopScanner();
   state.tab = tab;
@@ -1508,11 +1507,6 @@ function toggleBatchScanMode(on){
 // skan w trakcie odliczania po prostu je resetuje zamiast się nakładać.
 let checkModeTimer = null;
 
-// Timer dla scanReturnFeedback (patrz renderLendBox/onBarcode): po zeskanowaniu w trybie
-// Zwrot pozycji, która nie była wypożyczona, karta zostaje na ekranie 3s z komunikatem
-// zamiast przycisków "Pożycz komuś", po czym appka sama wraca do skanowania.
-let scanFeedbackTimer = null;
-
 function toggleCheckMode(){
   state.checkMode = !state.checkMode;
   localStorage.setItem('bib_check_mode', state.checkMode ? '1' : '0');
@@ -1713,8 +1707,6 @@ async function onBarcode(code){
         state.openItemId = existing.id;
         state.scanReturnFeedback = true;
         openItem(existing.id);
-        clearTimeout(scanFeedbackTimer);
-        scanFeedbackTimer = setTimeout(() => setTab('scan'), 3000);
       }
     }
     return;
