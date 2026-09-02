@@ -456,6 +456,7 @@ let state = {
   checkMode: localStorage.getItem('bib_check_mode') === '1',
   scanActionMode: localStorage.getItem('bib_scan_action_mode') || null,
   scanReturnFeedback: false,
+  scanReturnConfirm: null, // { loanId, itemId } — zwrot ze skanu czeka na potwierdzenie Enterem, patrz onBarcode/onLoanBarcode
   toConsumeManualSort: localStorage.getItem('bib_to_consume_manual_sort') === '1',
   locale: localStorage.getItem('bib_locale') || 'pl',
   theme: localStorage.getItem('bib_theme') || 'dark',
@@ -600,6 +601,16 @@ document.addEventListener('keydown', function(e){
   const editable = document.activeElement && document.activeElement.isContentEditable;
   if (tag === 'input' || tag === 'textarea' || tag === 'select' || tag === 'button' || tag === 'a' || editable) return;
   e.preventDefault();
+  // Zwrot zainicjowany skanowaniem (patrz onBarcode/onLoanBarcode) czeka na Enter jako
+  // świadome potwierdzenie zamiast zwracać natychmiast — zanim appka to zrobi, user
+  // widzi na karcie komu i czy przeterminowane. Ma priorytet nad zwykłym skrótem
+  // "Enter = sprawdź cenę rynkową" poniżej, bo dotyczy tej samej karty pozycji.
+  if (state.scanReturnConfirm && state.scanReturnConfirm.itemId === state.openItemId){
+    const { loanId, itemId, resumeBatchScan } = state.scanReturnConfirm;
+    state.scanReturnConfirm = null;
+    returnLoan(loanId, itemId).then(() => { if (resumeBatchScan) startLoanScan(); });
+    return;
+  }
   checkMarketPriceNow(state.openItemId);
 });
 
@@ -631,6 +642,7 @@ window.addEventListener('popstate', function(){
   }
   if (state.openItemId){
     state.openItemId = null;
+    state.scanReturnConfirm = null;
     renderTab();
     return;
   }
@@ -1202,6 +1214,7 @@ function goToCollectionHome(){
 async function setTab(tab){
   clearTimeout(checkModeTimer);
   state.scanReturnFeedback = false;
+  state.scanReturnConfirm = null;
   await stopScanner();
   state.tab = tab;
   state.scannedBarcode = null;
@@ -1470,7 +1483,7 @@ function renderScan(main){
     <div class="scan-modes">
       <button class="btn tile-sprawdz ${state.checkMode ? '' : 'secondary'}" onclick="toggleCheckMode()" title="Po zeskanowaniu istniejącej pozycji karta pokazuje się na 1,5 sekundy, po czym appka sama wraca do skanowania">${icon('check')}<span>${t('check_mode')}</span></button>
       <button class="btn tile-wypozycz ${state.scanActionMode==='lend' ? '' : 'secondary'}" onclick="toggleScanActionMode('lend')" title="Zeskanowanie pozycji od razu otwiera formularz wypożyczenia">${icon('loans')}<span>${t('lend_mode')}</span></button>
-      <button class="btn tile-zwrot ${state.scanActionMode==='return' ? '' : 'secondary'}" onclick="toggleScanActionMode('return')" title="Zeskanowanie wypożyczonej pozycji od razu oznacza zwrot">${icon('undo')}<span>${t('return_mode')}</span></button>
+      <button class="btn tile-zwrot ${state.scanActionMode==='return' ? '' : 'secondary'}" onclick="toggleScanActionMode('return')" title="Zeskanowanie wypożyczonej pozycji pokazuje jej status — zwrot zatwierdzasz Enterem">${icon('undo')}<span>${t('return_mode')}</span></button>
     </div>
     ${desktop ? '' : `
     <div class="card" style="text-align:center;display:flex;flex-direction:column;justify-content:center;align-items:center;min-height:40vh;">
@@ -1699,7 +1712,11 @@ async function onBarcode(code){
       }
     } else {
       if (activeLoan){
-        await returnLoan(activeLoan.id, existing.id); // pokazuje kartę pozycji z już zatwierdzonym zwrotem
+        // Nie zwracamy od razu — pokazujemy kartę z aktualnym statusem (komu, czy
+        // przeterminowane), a zwrot zatwierdza się dopiero Enterem albo przyciskiem
+        // "Oznacz jako zwrócone", patrz keydown listener przy scanReturnConfirm.
+        state.scanReturnConfirm = { loanId: activeLoan.id, itemId: existing.id };
+        openItem(existing.id);
       } else {
         // openItemId musi być ustawiony PRZED flagą/openItem(), bo openItem() zeruje
         // scanReturnFeedback, gdy trafia na inną pozycję niż aktualnie "otwarta" (ten sam
@@ -3830,7 +3847,7 @@ function openItem(id){
   const nextId = hasNav && navIdx < navIds.length - 1 ? navIds[navIdx + 1] : null;
   main.innerHTML = `
     <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;">
-      <button class="link" onclick="state.openItemId=null;renderTab()">&larr; ${state.tab==='list' ? t('back_to_list') : t('back')}</button>
+      <button class="link" onclick="state.openItemId=null;state.scanReturnConfirm=null;renderTab()">&larr; ${state.tab==='list' ? t('back_to_list') : t('back')}</button>
       ${hasNav ? `
         <div style="display:flex;gap:8px;">
           <button class="btn small secondary" style="flex:0 0 auto;" ${prevId?`onclick="openItem('${prevId}')"`:'disabled'}>◀ Poprzednia</button>
@@ -3880,6 +3897,9 @@ function openItem(id){
           <span class="badge ${isOverdue(loan)?'danger':'warn'}">${loan.direction==='in' ? 'Pożyczone od: '+escapeHtml(loan.borrower_name) : 'Wypożyczone: '+escapeHtml(loan.borrower_name)}</span>
           <span class="badge accent">${isOverdue(loan)?loanDaysOverdue(loan)+'d po terminie':loanDaysLeft(loan)+'d do zwrotu'}</span>
         </div>
+        ${state.scanReturnConfirm && state.scanReturnConfirm.itemId === item.id ? `
+          <div class="meta" style="margin-bottom:10px;">⏎ Naciśnij Enter, aby potwierdzić zwrot</div>
+        ` : ''}
         <label>${t('borrow_date')}</label>
         <input type="date" id="loan-date-input" value="${toLocalDateInput(loan.borrowed_at)}" onchange="updateLoanDate('${loan.id}','${item.id}')" style="margin-bottom:12px;">
         <label>${t('due_date')}</label>
@@ -4056,6 +4076,7 @@ async function updateDueDate(loanId, itemId){
 // stayOnItemId: gdy podane, po zwrocie zostajemy na karcie tej pozycji (odświeżonej,
 // już bez aktywnego wypożyczenia) zamiast wracać do listy/zakładki, z której przyszliśmy.
 async function returnLoan(loanId, stayOnItemId){
+  if (state.scanReturnConfirm && state.scanReturnConfirm.loanId === loanId) state.scanReturnConfirm = null;
   const loan = state.loans.find(l => l.id === loanId);
   const { error } = await sb.from('loans').update({ returned_at: new Date().toISOString() }).eq('id', loanId);
   if (error){ toast('Błąd: ' + error.message); return; }
@@ -4385,8 +4406,11 @@ async function onLoanBarcode(code){
     openItem(item.id);
     return;
   }
-  await returnLoan(loan.id);
-  if (state.loanBatchScanMode) startLoanScan();
+  // Nie zwracamy od razu — pokazujemy kartę z aktualnym statusem, zwrot zatwierdza
+  // się Enterem (patrz keydown listener przy scanReturnConfirm). W trybie wsadowym
+  // skanowanie wznawia się dopiero po zatwierdzeniu tego zwrotu, nie przed nim.
+  state.scanReturnConfirm = { loanId: loan.id, itemId: item.id, resumeBatchScan: state.loanBatchScanMode };
+  openItem(item.id);
 }
 
 // ---------------- USTAWIENIA TAB ----------------
