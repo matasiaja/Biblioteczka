@@ -9,6 +9,11 @@ compatibility_date = "2026-01-01"
 SUPABASE_URL = "https://alxwzewdsqhaszzcpkga.supabase.co"
 # Adres, na który leci cotygodniowy raport wzrostów/spadków (patrz sendWeeklyReportEmail()
 # w worker.js) — nie jest tajny (to Twój własny e-mail), stąd zwykła zmienna.
+#
+# UWAGA: dopóki nie ma zweryfikowanej własnej domeny w Resend, raport wychodzi od
+# nadawcy onboarding@resend.dev, a ten dostarcza WYŁĄCZNIE na adres konta Resend
+# (mathyus@gmail.com). Zmiana tego adresu na inny = błąd 403 z Resend, dopóki nie
+# zweryfikujesz domeny i nie ustawisz sekretu RESEND_FROM.
 REPORT_EMAIL_TO = "mathyus@gmail.com"
 
 # Dwa harmonogramy rozróżniane w scheduled() po event.cron:
