@@ -351,11 +351,11 @@ async function sendWeeklyReportEmail(env) {
   const serviceKey = env.SUPABASE_SERVICE_ROLE_KEY;
   if (!supaUrl || !serviceKey) {
     console.log('SUPABASE_URL/SUPABASE_SERVICE_ROLE_KEY not configured — pomijam raport mailowy');
-    return;
+    return { sent: false, reason: 'SUPABASE_URL/SUPABASE_SERVICE_ROLE_KEY not configured' };
   }
   if (!env.RESEND_API_KEY || !env.REPORT_EMAIL_TO) {
     console.log('RESEND_API_KEY/REPORT_EMAIL_TO not configured — pomijam raport mailowy');
-    return;
+    return { sent: false, reason: 'RESEND_API_KEY/REPORT_EMAIL_TO not configured' };
   }
   const headers = { apikey: serviceKey, Authorization: `Bearer ${serviceKey}` };
   const itemsRes = await fetch(
@@ -365,7 +365,7 @@ async function sendWeeklyReportEmail(env) {
   const items = await itemsRes.json();
   if (!Array.isArray(items)) {
     console.log('nieoczekiwana odpowiedź Supabase przy raporcie mailowym', items);
-    return;
+    return { sent: false, reason: 'nieoczekiwana odpowiedź Supabase: ' + JSON.stringify(items).slice(0, 300) };
   }
   const fxRes = await fetch('https://api.frankfurter.dev/v1/latest?base=GBP');
   const fxData = await fxRes.json();
@@ -405,9 +405,14 @@ async function sendWeeklyReportEmail(env) {
       html
     })
   });
+  const resendBody = await res.text();
   if (!res.ok) {
-    console.log('Błąd wysyłki raportu mailowego przez Resend', res.status, await res.text());
+    console.log('Błąd wysyłki raportu mailowego przez Resend', res.status, resendBody);
+    return { sent: false, reason: `Resend HTTP ${res.status}: ${resendBody.slice(0, 300)}`, to: env.REPORT_EMAIL_TO };
   }
+  let id = null;
+  try { id = JSON.parse(resendBody).id; } catch (e) { /* nieistotne */ }
+  return { sent: true, to: env.REPORT_EMAIL_TO, id, gainers: perf.gainers.length, losers: perf.losers.length };
 }
 
 export default {
@@ -430,8 +435,8 @@ export default {
     // Wysyła zawsze na REPORT_EMAIL_TO (Twój własny e-mail), więc brak dodatkowej
     // autoryzacji jest tu niegroźny — najwyżej ktoś sprawi, że dostaniesz maila.
     if (url.pathname.endsWith('/send-report-now')) {
-      await sendWeeklyReportEmail(env);
-      return json({ ok: true });
+      const result = await sendWeeklyReportEmail(env);
+      return json({ ok: true, ...result });
     }
     return json({ error: 'not found' }, 404);
   },
